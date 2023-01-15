@@ -60,6 +60,8 @@ import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+tbar_icon = os.getcwd() + '/RUBICS ICON.ico'
+
 ######################################################################################################################
 # SECTION 2: DEF FUNCTIONS
 ######################################################################################################################
@@ -1737,7 +1739,8 @@ layout = [
 ]
 
 # Window
-window = sg.Window('RUBICS', layout, finalize=True, return_keyboard_events=True, resizable=True, font=('Helvetica', 10))
+window = sg.Window('RUBICS', layout, finalize=True, return_keyboard_events=True, resizable=True, font=('Helvetica', 10),
+                  icon=tbar_icon)
 
 # Initiate the reference price section.
 if pr_group_dict[1] == 0:
