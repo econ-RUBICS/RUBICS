@@ -1,0 +1,435 @@
+{
+  "monte_carlo_settings": {
+    "seed": 438167,
+    "n_simulations": 5000
+  },
+  "discount_rate_settings": {
+    "discounting_method": "Constant",
+    "discount_rate": 7
+  },
+  "distribution_analysis_settings": {
+    "simple_weight_matrix": [
+      ["", "Waterfront", "Suburb"],
+      ["Government", 1, 1],
+      ["Business", 1, 1],
+      ["Affluent", 0.9, 0.95],
+      ["Working Class", 1.3, 1.3]
+    ]
+  },
+  "reference_prices": {
+    "country": "Australia",
+    "year": 2023,
+    "currency_conversion_range": "5 years",
+    "currency_conversion_measure": "Mean",
+    "price_group_1": {
+      "ID": "Emergency Costs",
+      "MC_PDF": "None",
+      "price_line_1": {
+        "ID": "Clean-up",
+        "units": "Streets",
+        "nominal_value": 500,
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "Triangular",
+        "PDF_min": 0.7,
+        "PDF_max": 1.35,
+        "PDF_mode": 1.0,
+        "comments": "Estimate from previous years."
+      },
+      "price_line_2": {
+        "ID": "Evacuation",
+        "units": "Helicopter",
+        "nominal_value": 300,
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1.1,
+        "MC_PDF": "None",
+        "comments": "Estimate from previous years. Adjusted for additional fuel costs."
+      }
+    },
+    "price_group_2": {
+      "ID": "Costruction Costs",
+      "MC_PDF": "PERT",
+      "PDF_min": 0.99,
+      "PDF_max": 1.5,
+      "PDF_mode": 1.0,
+      "price_line_1": {
+        "ID": "Steel",
+        "units": "Total",
+        "nominal_value": 300,
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "Uniform",
+        "PDF_min": 0.9,
+        "PDF_max": 1.2,
+        "comments": "Builder's Quote"
+      },
+      "price_line_2": {
+        "ID": "Concrete",
+        "units": "Total",
+        "nominal_value": 600,
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Builder's Quote"
+      }
+    },
+    "price_group_3": {
+      "ID": "Benefits",
+      "MC_PDF": "None",
+      "price_line_1": {
+        "ID": "Provisioning Services",
+        "units": "Crabs",
+        "nominal_value": 1,
+        "currency": "AUS",
+        "value_year": 2015,
+        "adjustment_factor": 1,
+        "MC_PDF": "Uniform",
+        "PDF_min": 0.9,
+        "PDF_max": 1.1,
+        "comments": "Manfred(2015) Harvesting of Hard-bodied sea crabs over time."
+      },
+      "price_line_2": {
+        "ID": "Business surplus",
+        "units": "Total",
+        "nominal_value": 90,
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "Triangular",
+        "PDF_min": 0.5,
+        "PDF_max": 1.3,
+        "PDF_mode": 1.0,
+        "comments": "Survey of local businesses."
+      },
+      "price_line_3": {
+        "ID": "Property Values",
+        "units": "Total",
+        "nominal_value": 40,
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Annualised Historical Average"
+      }
+    }
+  },
+  "event_model": {
+    "event_1": {
+      "ID": "Storm",
+      "outcome_1": {
+        "ID": "Storm Occurs",
+        "scenario_0": {
+          "period_range": ["..."],
+          "outcome_weight": ["50+(t*3)"],
+          "periods_without_repeat": 0,
+          "max_repeats": "None"
+        },
+        "scenario_1": {
+          "period_range": ["<<<"],
+          "outcome_weight": ["<<<"],
+          "periods_without_repeat": "<<<",
+          "max_repeats": "<<<"
+        }
+      },
+      "outcome_2": {
+        "ID": "No Storm",
+        "scenario_0": {
+          "period_range": ["..."],
+          "outcome_weight": ["50"],
+          "periods_without_repeat": 0,
+          "max_repeats": "None"
+        },
+        "scenario_1": {
+          "period_range": ["<<<"],
+          "outcome_weight": ["<<<"],
+          "periods_without_repeat": "<<<",
+          "max_repeats": "<<<"
+        }
+      }
+    },
+    "event_2": {
+      "event_depends": ["Storm Occurs"],
+      "ID": "School Hols",
+      "outcome_1": {
+        "ID": "Holidays On",
+        "scenario_0": {
+          "period_range": ["..."],
+          "outcome_weight": ["10"],
+          "periods_without_repeat": 0,
+          "max_repeats": "None"
+        },
+        "scenario_1": {
+          "period_range": ["<<<"],
+          "outcome_weight": ["<<<"],
+          "periods_without_repeat": "<<<",
+          "max_repeats": "<<<"
+        }
+      },
+      "outcome_2": {
+        "ID": "Not On",
+        "scenario_0": {
+          "period_range": ["..."],
+          "outcome_weight": ["90"],
+          "periods_without_repeat": 0,
+          "max_repeats": "None"
+        },
+        "scenario_1": {
+          "period_range": ["<<<"],
+          "outcome_weight": ["<<<"],
+          "periods_without_repeat": "<<<",
+          "max_repeats": "<<<"
+        }
+      }
+    }
+  },
+  "quantity_scenarios": {
+    "scenario_0": {
+      "scenario_description": "This describes business as usual.",
+      "quantity_group_1": {
+        "ID": "Storm Event Costs",
+        "group_value_type": "Costs",
+        "MC_PDF": "Exponential",
+        "PDF_lambda": 1.0,
+        "quantity_line_1": {
+          "ID": "Clean-up Costs",
+          "value": "Clean-up",
+          "stakeholder_group": "Government",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,49"
+          ],
+          "quantity": [
+            "5"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Storm Occurs",
+          "comments": "Street cleanup."
+        },
+        "quantity_line_2": {
+          "ID": "Emergency Evac",
+          "value": "Evacuation",
+          "stakeholder_group": "Government",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,49"
+          ],
+          "quantity": [
+            "3"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Holidays On",
+          "comments": "Evaluation of children by helicopter."
+        }
+      },
+      "quantity_group_2": {
+        "ID": "Construction Costs",
+        "group_value_type": "Costs",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Frame",
+          "value": "Steel",
+          "stakeholder_group": "Government",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "0"
+          ],
+          "MC_PDF": "None",
+          "comments": "Does not apply in scenario 0"
+        },
+        "quantity_line_2": {
+          "ID": "Filling",
+          "value": "Concrete",
+          "stakeholder_group": "Government",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "0"
+          ],
+          "MC_PDF": "None",
+          "comments": "Does not apply in scenario 0."
+        }
+      },
+      "quantity_group_3": {
+        "ID": "All Benefits",
+        "group_value_type": "Benefits",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Crab Harvesting",
+          "value": "Provisioning Services",
+          "stakeholder_group": "Working Class",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,49"
+          ],
+          "quantity": [
+            "100"
+          ],
+          "MC_PDF": "Triangular",
+          "PDF_min": 0.8,
+          "PDF_max": 1.5,
+          "PDF_mode": 1.0,
+          "comments": "Local catch numbers vary by season"
+        },
+        "quantity_line_2": {
+          "ID": "Business profits",
+          "value": "Business surplus",
+          "stakeholder_group": "Business",
+          "geographic_zone": "Waterfront",
+          "period_range": [
+            "0,49"
+          ],
+          "quantity": [
+            "1"
+          ],
+          "MC_PDF": "None",
+          "comments": "Assuming average business conditions and employment continue."
+        },
+        "quantity_line_3": {
+          "ID": "Property Values",
+          "value": "Property Values",
+          "stakeholder_group": "Affluent",
+          "geographic_zone": "Waterfront",
+          "period_range": [
+            "0,49"
+          ],
+          "quantity": [
+            "1"
+          ],
+          "MC_PDF": "None",
+          "comments": "Assuming property values do not decline in scenario 0."
+        }
+      }
+    },
+    "scenario_1": {
+      "scenario_description": "Construction of a structure that limits damages of storms.",
+      "quantity_group_1": {
+        "ID": "Storm Event Costs",
+        "group_value_type": "Costs",
+        "MC_PDF": "Exponential",
+        "PDF_lambda": 1.0,
+        "quantity_line_1": {
+          "ID": "Clean-up Costs",
+          "value": "Clean-up",
+          "stakeholder_group": "Government",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,0", "1,49"
+          ],
+          "quantity": [
+            "5", "1"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Storm Occurs",
+          "comments": "Street cleanup."
+        },
+        "quantity_line_2": {
+          "ID": "Emergency Evac",
+          "value": "Evacuation",
+          "stakeholder_group": "Government",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,0", "1,49"
+          ],
+          "quantity": [
+            "3", "0.5"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Holidays On",
+          "comments": "Evaluation of children by helicopter."
+        }
+      },
+      "quantity_group_2": {
+        "ID": "Construction Costs",
+        "group_value_type": "Costs",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Frame",
+          "value": "Steel",
+          "stakeholder_group": "Government",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "1"
+          ],
+          "MC_PDF": "None",
+          "comments": "Building in year 1 only"
+        },
+        "quantity_line_2": {
+          "ID": "Filling",
+          "value": "Concrete",
+          "stakeholder_group": "Government",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "1"
+          ],
+          "MC_PDF": "None",
+          "comments": "Building in year 1 only."
+        }
+      },
+      "quantity_group_3": {
+        "ID": "All Benefits",
+        "group_value_type": "Benefits",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Crab Harvesting",
+          "value": "Provisioning Services",
+          "stakeholder_group": "Working Class",
+          "geographic_zone": "Suburb",
+          "period_range": [
+            "0,0", "1,49"
+          ],
+          "quantity": [
+            "100", "0"
+          ],
+          "MC_PDF": "Triangular",
+          "PDF_min": 0.8,
+          "PDF_max": 1.5,
+          "PDF_mode": 1.0,
+          "comments": "After construction crab harvesting is impossible."
+        },
+        "quantity_line_2": {
+          "ID": "Business profits",
+          "value": "Business surplus",
+          "stakeholder_group": "Business",
+          "geographic_zone": "Waterfront",
+          "period_range": [
+            "0,0", "1,49"
+          ],
+          "quantity": [
+            "1", "1+t*0.02"
+          ],
+          "MC_PDF": "None",
+          "comments": "Assuming 2% growth in business profits due to more customers over time."
+        },
+        "quantity_line_3": {
+          "ID": "Property Values",
+          "value": "Property Values",
+          "stakeholder_group": "Affluent",
+          "geographic_zone": "Waterfront",
+          "period_range": [
+            "0,0", "1,49"
+          ],
+          "quantity": [
+            "1", "1.1"
+          ],
+          "MC_PDF": "None",
+          "comments": "Assuming an immediate and permanent impact on property values."
+        }
+      }
+    }
+  }
+}
