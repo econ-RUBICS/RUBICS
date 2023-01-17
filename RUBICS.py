@@ -1377,21 +1377,6 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
                                        index=['type'], aggfunc=np.sum)
     display_table_npv.loc['Costs'] = display_table_npv.loc['Costs'] * -1
 
-    # Calculate BCR denominator
-    '''display_table_bcr = pd.pivot_table(display_table, values=select_col, columns=['scenario'],
-                                       index=['type', 'group_id'], aggfunc=np.sum)
-    if bcr_denom == ['All']:
-        display_table_bcr.loc['BCR_DENOM', :] = display_table_bcr.loc['Costs'].sum().values
-
-        display_table_bcr.loc['BCR_NUMR', :] = display_table_bcr.loc['Benefits'].sum().values
-    else:
-        display_table_bcr.loc['BCR_TOTCOST', :] = display_table_costs.sum().values
-        display_table_bcr.loc['BCR_DENOM', :] = display_table_bcr.loc[bcr_denom].sum().values
-        display_table_bcr.loc['BCR_NUMRCOST', :] = display_table_bcr.loc['BCR_TOTCOST'] - display_table_bcr.loc[
-            'BCR_DENOM']
-        display_table_bcr.loc['BCR_NUMR', :] = display_table_bcr.loc['Benefits'].sum().values - display_table_bcr.loc[
-            'BCR_NUMRCOST']'''
-
     display_table = pd.pivot_table(display_table, values=select_col, columns=['scenario'],
                                    index=['type', 'group_id', 'line_id'], aggfunc=np.sum)
     display_table.sort_index(level=0, ascending=False, inplace=True)
@@ -1425,7 +1410,7 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     cba_results.insert(1, dot_line)
 
     if bcr_denom != 'All':
-        cba_results.append(f'*BCR numerator is {bcr_denom}')
+        cba_results.append(f'*BCR denominator is {bcr_denom}')
 
     ml_height = len(cba_results)+1
     ml_width = len(cba_results[0])
