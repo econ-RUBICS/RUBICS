@@ -1318,7 +1318,7 @@ def outcome_arrays(weights, noreps, maxreps, monte_carlo_sims, depends_mask):
     return outcome_map_dict
 
 
-def results_display_table(run, measure, weights, net_scn_z, distribution_segments=['All'], bcr_denom=['All']):
+def results_display_table(run, measure, weights, net_scn_z, distribution_segments=['All'], bcr_denom='All'):
     if measure == 'Average':
         select_col = 'discounted_total_value_mean'
     else:
@@ -1326,7 +1326,7 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
 
     display_table = run_results[run][['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
                                       'geography', 'weight', select_col]]
-
+    #print(display_table.to_string())
     if distribution_segments != ['All']:
         display_table['stk_geo'] = list(zip(display_table['stakeholder'], display_table['geography']))
         display_table = display_table.loc[display_table['stk_geo'].isin(distribution_segments)]
@@ -1342,23 +1342,33 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
 
     if net_scn_z == 'Yes':
         scn_z_frame = display_table.loc[display_table['scenario'] == 0].rename(columns={select_col: f'{select_col}_0'})
+
         display_table = pd.merge(display_table, scn_z_frame[['group_id', 'line_id', f'{select_col}_0']],
                                  how='left', on=['group_id', 'line_id'])
 
         display_table[select_col] = display_table[select_col] - display_table[f'{select_col}_0']
 
+
     if weights == 'Weighted':
-        display_table[select_col] = display_table[select_col] * display_table['weights']
+        display_table[select_col] = display_table[select_col] * display_table['weight']
 
     display_table = display_table[['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
                                    'geography', select_col]]
 
     # Calculate Total Costs
-    display_table_costs = display_table.loc[display_table['type'] == 'Costs']
+    display_table_costs = display_table.loc[(((display_table['type'] == 'Costs') & (display_table[select_col] >= 0)) |
+                                            ((display_table['type'] == 'Benefits') & (display_table[select_col] < 0)))]
+
+    display_table_costs[select_col] = display_table_costs[select_col].abs()
     display_table_costs = pd.pivot_table(display_table_costs, values=select_col, columns=['scenario'],
                                          index=['group_id', 'line_id'], aggfunc=np.sum)
+
+
     # Calculate Total Benefits
-    display_table_benefits = display_table.loc[display_table['type'] == 'Benefits']
+    display_table_benefits = display_table.loc[(((display_table['type'] == 'Benefits') & (display_table[select_col] >= 0)) |
+                                            ((display_table['type'] == 'Costs') & (display_table[select_col] < 0)))]
+    display_table_benefits[select_col] = display_table_benefits[select_col].abs()
+
     display_table_benefits = pd.pivot_table(display_table_benefits, values=select_col, columns=['scenario'],
                                             index=['group_id', 'line_id'], aggfunc=np.sum)
 
@@ -1368,7 +1378,7 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     display_table_npv.loc['Costs'] = display_table_npv.loc['Costs'] * -1
 
     # Calculate BCR denominator
-    display_table_bcr = pd.pivot_table(display_table, values=select_col, columns=['scenario'],
+    '''display_table_bcr = pd.pivot_table(display_table, values=select_col, columns=['scenario'],
                                        index=['type', 'group_id'], aggfunc=np.sum)
     if bcr_denom == ['All']:
         display_table_bcr.loc['BCR_DENOM', :] = display_table_bcr.loc['Costs'].sum().values
@@ -1380,7 +1390,7 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
         display_table_bcr.loc['BCR_NUMRCOST', :] = display_table_bcr.loc['BCR_TOTCOST'] - display_table_bcr.loc[
             'BCR_DENOM']
         display_table_bcr.loc['BCR_NUMR', :] = display_table_bcr.loc['Benefits'].sum().values - display_table_bcr.loc[
-            'BCR_NUMRCOST']
+            'BCR_NUMRCOST']'''
 
     display_table = pd.pivot_table(display_table, values=select_col, columns=['scenario'],
                                    index=['type', 'group_id', 'line_id'], aggfunc=np.sum)
@@ -1389,15 +1399,19 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     display_table.loc['TOTAL COSTS', :] = display_table_costs.sum().values
     display_table.loc['TOTAL BENEFITS', :] = display_table_benefits.sum().values
     display_table.loc['NPV', :] = display_table_npv.sum().values
-    display_table.loc['BCR', :] = display_table_bcr.loc['BCR_NUMR'].values / display_table_bcr.loc['BCR_DENOM'].values
-    # print(display_table.to_string())
+    if bcr_denom == 'All':
+        display_table.loc['BCR', :] = display_table.loc[['TOTAL BENEFITS']].values / display_table.loc[['TOTAL COSTS']].values
+    else:
+        display_table.loc['BCR*', :] = (display_table.loc[['NPV']].values + display_table.loc[('Costs', bcr_denom,)].sum().values) /\
+                                      display_table.loc[('Costs', bcr_denom,)].sum().values
+    #print(display_table.to_string())
 
     cba_results = display_table.round(3).to_string()
     cba_results = cba_results.split('\n')
     ml_width = max(map(len, cba_results))
     ml_height = len(cba_results)
 
-    n_benefits = display_table_benefits.shape[0]
+    n_benefits = display_table.loc[['Benefits']].shape[0]
 
     blank_line = ' ' * ml_width
     dash_line = '_' * ml_width
@@ -1410,7 +1424,10 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     cba_results.insert(2, dash_line)
     cba_results.insert(1, dot_line)
 
-    ml_height = len(cba_results)
+    if bcr_denom != 'All':
+        cba_results.append(f'*BCR numerator is {bcr_denom}')
+
+    ml_height = len(cba_results)+1
     ml_width = len(cba_results[0])
 
     cba_results = '\n'.join(cba_results)
@@ -1447,7 +1464,7 @@ def plot_histo_cdf(run_number, scenario, weights, net_scn_z, distribution_segmen
             'discounted_total_value_0']
 
     if weights == 'Weighted':
-        plot_data['discounted_total_value'] = plot_data['discounted_total_value'] * plot_data['weights']
+        plot_data['discounted_total_value'] = plot_data['discounted_total_value'] * plot_data['weight']
 
     plot_data = plot_data[['scenario', 'group_id', 'line_id', 'type', 'stakeholder',
                            'geography', 'discounted_total_value']]
@@ -1487,8 +1504,6 @@ def plot_histo_cdf(run_number, scenario, weights, net_scn_z, distribution_segmen
     result_graphs[f'canvas_{run_number}'].draw()
 
 
-cba_settings = {'measure': 'Average', 'use_weights': 'Unweighted', 'net_z': 'No', 'distr_segs': ['All'],
-                'bcr_denom': ['All']}
 run_cba_settings = {}
 run_results = {}
 run_number = 0
@@ -1497,7 +1512,10 @@ result_graphs = {}
 
 def result_popup(run_number):
     global run_results
+    global run_cba_settings
     run_results[run_number] = quantity_stream_table
+    cost_groups = run_results[run_number].loc[run_results[run_number]['type'] == 'Costs']['group_id'].to_list()
+    cost_groups = ['All'] + [*set(cost_groups)]
 
     da_radio_layout = []
     if values['-DA_STKGRP-'] != '' and values['-DA_GEOGRP-'] != '':
@@ -1519,12 +1537,14 @@ def result_popup(run_number):
         da_radio_layout = [sg.Frame(title='Distribution Analysis', layout=[
             [sg.Text('Display '),
              sg.Combo(values=['Unweighted', 'Weighted'], default_value='Unweighted', auto_size_text=True,
-                      key=f'-RUN{run_number}_WEIGHT_USE-'),
+                      key=f'-RUN{run_number}_WEIGHT_USE-', enable_events=True),
              sg.Text(' results')],
             [sg.Column(da_radio_layout_C0), sg.Column(da_radio_layout_CN)]
         ])]
 
-    run_cba_settings[run_number] = cba_settings
+    run_cba_settings[run_number] = {'measure': 'Average', 'use_weights': 'Unweighted', 'net_z': 'No', 'distr_segs': ['All'],
+                'bcr_denom': 'All'}
+
     cba_results, ml_height, ml_width = results_display_table(run_number,
                                                              run_cba_settings[run_number]['measure'],
                                                              run_cba_settings[run_number]['use_weights'],
@@ -1543,7 +1563,9 @@ def result_popup(run_number):
             [sg.Text('Monte Carlo Results to Display:'), sg.Combo(values=['Average', 'P5', 'P10', 'P20', 'P30', 'P40',
                                                                           'P50', 'P60', 'P70', 'P80', 'P90', 'P95'],
                                                                   default_value='Average', auto_size_text=True,
-                                                                  key=f'-RUN{run_number}_MEASURE-', enable_events=True)]
+                                                                  key=f'-RUN{run_number}_MEASURE-', enable_events=True)],
+            [sg.Text('BCR Denominator:'), sg.Combo(values=cost_groups, default_value='All', auto_size_text=True,
+                                                   key=f'-RUN{run_number}_BCR_DENOM-', enable_events=True)]
         ])],
         da_radio_layout,
         [sg.Frame(title='CBA RESULTS', layout=[
@@ -1576,14 +1598,17 @@ def result_popup(run_number):
 
 def loop_result_window_events(run):
     run_event, run_values = result_windows[run].read(timeout=100)
+    if run_event != '__TIMEOUT__':
+        print(run_event)
     if run_event == f'-RUN{run}_EXIT-':
         result_windows[run].close()
         result_windows[run] = None
 
     if run_event in [f'-RUN{run}_MEASURE-', f'-RUN{run}_WEIGHT_USE-', f'-RUN{run}_NET_SCN0-',
-                     f'-RUN{run}_SCN_GRAPH-'] or any([re.match(r'-RUN\d*_DA_SELECT\d*_\d*-', run_event)]):
+                     f'-RUN{run}_SCN_GRAPH-', f'-RUN{run}_BCR_DENOM-'] or any([re.match(r'-RUN\d*_DA_SELECT\d*_\d*-', run_event)]):
         run_cba_settings[run]['measure'] = run_values[f'-RUN{run}_MEASURE-']
         run_cba_settings[run]['net_z'] = run_values[f'-RUN{run}_NET_SCN0-']
+        run_cba_settings[run]['bcr_denom'] = run_values[f'-RUN{run}_BCR_DENOM-']
 
         if len(DA_table) > 0:
             run_cba_settings[run]['use_weights'] = run_values[f'-RUN{run}_WEIGHT_USE-']
@@ -1592,6 +1617,7 @@ def loop_result_window_events(run):
                 for geo in range(1, len(DA_table[1])):
                     if run_values[f'-RUN{run}_DA_SELECT{stk}_{geo}-'] is True:
                         run_cba_settings[run]['distr_segs'].append((stakeholder_list[stk - 1], geozones_list[geo - 1]))
+
         result_windows[run][f'-RUN{run}_CBA_TABLE_DISPLAY-'].update(results_display_table(run,
                                                                                           run_cba_settings[run][
                                                                                               'measure'],
@@ -1740,7 +1766,7 @@ layout = [
 
 # Window
 window = sg.Window('RUBICS', layout, finalize=True, return_keyboard_events=True, resizable=True, font=('Helvetica', 10),
-                  icon=tbar_icon)
+                   icon=tbar_icon)
 
 # Initiate the reference price section.
 if pr_group_dict[1] == 0:
@@ -2023,7 +2049,7 @@ while True:
                                 MC_holding_dict.update({f'{k_pair[1]}':
                                                             user_settings['quantity_scenarios'][f'scenario_{scn}'][
                                                                 f'quantity_group_{grp}'][f'{k_pair[0]}']})
-                                MC_holding_dict = get_pdf_settings(f'-SCN{scn}_QG{grp}_MC_TYPE-', True)
+                                #MC_holding_dict = get_pdf_settings(f'-SCN{scn}_QG{grp}_MC_TYPE-', True)
 
                     # Get a list of price lines in the price groups given in the user_settings_file
                     qs_lines_list_user_settings = [k for k in list(
@@ -2086,9 +2112,14 @@ while True:
                            ('n_simulations', '-RES_NUM_SIMS-')]:
                 if k_pair[0] in user_settings['monte_carlo_settings']:
                     window[f'{k_pair[1]}'].update(user_settings['monte_carlo_settings'][f'{k_pair[0]}'])
-
+        print(MC_holding_dict)
+        set_size(window['-PG_COLS-'], (None, 700))
+        set_size(window['-QS_COLS-'], (None, 950))
         window.refresh()
+        window['-PG_COLS-'].contents_changed()
+        window['-QS_COLS-'].contents_changed()
         window['Trigger Refresh'].click()
+        print(MC_holding_dict)
 
     ### DISCOUNT RATE EVENTS ------------------------------------------------------------------------------------------
     # If dropdown options are chosen, make fields visible based on input
@@ -2349,8 +2380,9 @@ while True:
         random_generator = np.random.default_rng(seed)
         n_simulations = int(values['-RES_NUM_SIMS-'])
         split_pranges = [list(map(int, re.split(',|\n', values[key]))) for key in values if 'PRANGE-' in str(key)]
+        split_pranges_flat = [period for sublist in split_pranges for period in sublist]
         # Get the maximum number of simulation periods from the Quantity Scenarios Tab
-        n_simulation_periods = np.amax(np.array(split_pranges))
+        n_simulation_periods = np.amax(np.array(split_pranges_flat))
 
         # Discount Rate Array
         if values['-DR_TYPE-'] == 'Constant':
@@ -2409,9 +2441,10 @@ while True:
                                                                    reference_price_monte_carlo_table[
                                                                        'group_monte_carlo_sims'] - 1) * \
                                                                   reference_price_monte_carlo_table['real_adj_value']
+        print(reference_price_monte_carlo_table.to_string())
 
         # Event Outcomes Array
-        # Convert shorthands to appropriate data. 
+        # Convert shorthands to appropriate data.
         for scn in range(0, n_scenarios + 1):
             for model_event in range(1, len(model_events_dict) + 1):
                 for outs in range(1, model_events_dict[model_event] + 1):
@@ -2422,19 +2455,30 @@ while True:
                     if model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_MAXREPS-'] == 'None':
                         model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_MAXREPS-'] = '-1'
 
-        event_outcome_records = [{
+        '''event_outcome_records = [{
             'event_id': 'none',
-            'event_n': 'none',
+            'event': 'none',
             'outcome_id': 'None',
             'scenario': 'none',
             'outcome_monte_carlo_sims': np.full((n_simulations, n_simulation_periods), True)
-        }]
+        }]'''
+        event_outcome_records = []
+        for scn in range(0, n_scenarios+1):
+            event_outcome_records.append({
+                'event_id': 'None',
+                'event': 'None',
+                'outcome_id': 'None',
+                'outcome': 'None',
+                'scenario': scn,
+                'outcome_monte_carlo_sims': np.full((n_simulations, n_simulation_periods), True)
+            })
+
         event_outcome_table = pd.DataFrame({
-            'event_id': ['none'],
-            'event_n': ['none'],
-            'outcome_id': ['none'],
-            'scenario': ['none'],
-            'outcome_monte_carlo_sims': ['none']
+            'event_id': ['blank'],
+            'event': ['blank'],
+            'outcome_id': ['blank'],
+            'scenario': ['blank'],
+            'outcome_monte_carlo_sims': ['blank']
         })
 
         model_events_list = list(model_events_dict.keys())
@@ -2446,27 +2490,25 @@ while True:
                                                                random_state=random_generator)
                     for scn in range(0, n_scenarios + 1):
                         # Inlcude a 'none' record for where there are no dependent events.
-                        event_outcome_records.append({
+                        '''event_outcome_records.append({
                             'event_id': 'None',
                             'event': 'None',
                             'outcome_id': 'None',
                             'outcome': 'None',
                             'scenario': scn,
                             'outcome_monte_carlo_sims': np.full((n_simulations, n_simulation_periods), True)
-                        })
+                        })'''
 
                         # Filter the table for the outcomes and scenarios needed, prepare the dependency mask.
                         if not depends_list:
                             model_event_depends_mask = np.ones((n_simulations, n_simulation_periods), dtype=int)
                         else:
                             depends_stack = \
-                                event_outcome_table.loc[event_outcome_table['outcome_id'].isin(depends_list) &
-                                                        event_outcome_table['scenario'] == scn][
+                                event_outcome_table.loc[(event_outcome_table['outcome_id'].isin(depends_list)) &
+                                                        (event_outcome_table['scenario'] == scn)][
                                     'outcome_monte_carlo_sims'].tolist()
-
-                            model_event_depends_mask = np.prod(
-                                np.stack((depends_stack, (np.ones((n_simulations, n_simulation_periods), dtype=int)))),
-                                axis=0)
+                            depends_stack.append((np.full((n_simulations, n_simulation_periods), True)))
+                            model_event_depends_mask = np.prod(depends_stack, axis=0)
 
                         model_event_out_weights = np.stack([np.array(expression_to_array(n_simulation_periods,
                                                                                          model_events_user_settings[
@@ -2497,7 +2539,7 @@ while True:
                                 'outcome_monte_carlo_sims': outcome_array_dict[out]
                             })
                         event_outcome_table = pd.DataFrame.from_records(event_outcome_records)
-            model_events_list.remove(model_event)
+                    model_events_list.remove(model_event)
 
         # Quantity Scenarios Array
         quantity_stream_records = []
@@ -2532,6 +2574,7 @@ while True:
                         'outcome_id': values[f'-SCN{scn}_QG{grp}_LIN{lin}_DEPENDS-']
                     })
         quantity_stream_table = pd.DataFrame.from_records(quantity_stream_records)
+
 
         # Create column for the weighted monte carlo shifted quantity streams.
         quantity_stream_table['monte_carlo_streams'] = (quantity_stream_table['line_monte_carlo_sims'] +
@@ -2586,9 +2629,9 @@ while True:
             DA_frame_items = pd.melt(DA_frame_items, id_vars='stakeholder', value_vars=DA_table[0][1:],
                                      value_name='weight',
                                      var_name='geography')
-            DA_frame = DA_frame.append(DA_frame_items)
+            DA_frame = pd.concat([DA_frame, DA_frame_items])
         quantity_stream_table = pd.merge(quantity_stream_table, DA_frame, how='left', on=['stakeholder', 'geography'])
-
+        #print(quantity_stream_table.to_string())
         run_number += 1
         result_windows[run_number] = result_popup(run_number)
         plot_histo_cdf(run_number,
