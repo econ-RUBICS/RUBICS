@@ -1319,6 +1319,8 @@ def outcome_arrays(weights, noreps, maxreps, monte_carlo_sims, depends_mask):
 
 
 def results_display_table(run, measure, weights, net_scn_z, distribution_segments=['All'], bcr_denom='All'):
+    fallback_bcr = False
+
     if measure == 'Average':
         select_col = 'discounted_total_value_mean'
     else:
@@ -1384,11 +1386,18 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     display_table.loc['TOTAL COSTS', :] = display_table_costs.sum().values
     display_table.loc['TOTAL BENEFITS', :] = display_table_benefits.sum().values
     display_table.loc['NPV', :] = display_table_npv.sum().values
+
     if bcr_denom == 'All':
         display_table.loc['BCR', :] = display_table.loc[['TOTAL BENEFITS']].values / display_table.loc[['TOTAL COSTS']].values
     else:
-        display_table.loc['BCR*', :] = (display_table.loc[['NPV']].values + display_table.loc[('Costs', bcr_denom,)].sum().values) /\
-                                      display_table.loc[('Costs', bcr_denom,)].sum().values
+        try:
+            display_table.loc['BCR*', :] = (display_table.loc[['NPV']].values + display_table.loc[('Costs', bcr_denom,)].sum().values) /\
+                                          display_table.loc[('Costs', bcr_denom,)].sum().values
+        except KeyError:
+            display_table.loc['BCR', :] = display_table.loc[['TOTAL BENEFITS']].values / display_table.loc[
+                ['TOTAL COSTS']].values
+            result_windows[run][f'-RUN{run_number}_BCR_DENOM-'].update(value='All')
+            fallback_bcr = True
     #print(display_table.to_string())
 
     cba_results = display_table.round(3).to_string()
@@ -1409,7 +1418,7 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     cba_results.insert(2, dash_line)
     cba_results.insert(1, dot_line)
 
-    if bcr_denom != 'All':
+    if bcr_denom != 'All' and fallback_bcr is False:
         cba_results.append(f'*BCR denominator is {bcr_denom}')
 
     ml_height = len(cba_results)+1
@@ -2393,6 +2402,7 @@ while True:
                                             (n_simulations, 1))
         # Produce a 2d array where rows=simulation and columns=time
         dr_monte_carlo_array = np.cumprod(1 - np.matmul(dr_monte_carlo_factors, dr_base_array), axis=1)
+        print(dr_monte_carlo_array)
 
         # Prices Array
         reference_price_monte_carlo_table = []
@@ -2426,7 +2436,6 @@ while True:
                                                                    reference_price_monte_carlo_table[
                                                                        'group_monte_carlo_sims'] - 1) * \
                                                                   reference_price_monte_carlo_table['real_adj_value']
-        print(reference_price_monte_carlo_table.to_string())
 
         # Event Outcomes Array
         # Convert shorthands to appropriate data.
@@ -2440,14 +2449,8 @@ while True:
                     if model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_MAXREPS-'] == 'None':
                         model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_MAXREPS-'] = '-1'
 
-        '''event_outcome_records = [{
-            'event_id': 'none',
-            'event': 'none',
-            'outcome_id': 'None',
-            'scenario': 'none',
-            'outcome_monte_carlo_sims': np.full((n_simulations, n_simulation_periods), True)
-        }]'''
         event_outcome_records = []
+        # Inlcude a 'none' record for where there are no dependent events.
         for scn in range(0, n_scenarios+1):
             event_outcome_records.append({
                 'event_id': 'None',
@@ -2474,15 +2477,6 @@ while True:
                     model_event_monte_carlo_sims = uniform.rvs(size=(n_simulations, n_simulation_periods),
                                                                random_state=random_generator)
                     for scn in range(0, n_scenarios + 1):
-                        # Inlcude a 'none' record for where there are no dependent events.
-                        '''event_outcome_records.append({
-                            'event_id': 'None',
-                            'event': 'None',
-                            'outcome_id': 'None',
-                            'outcome': 'None',
-                            'scenario': scn,
-                            'outcome_monte_carlo_sims': np.full((n_simulations, n_simulation_periods), True)
-                        })'''
 
                         # Filter the table for the outcomes and scenarios needed, prepare the dependency mask.
                         if not depends_list:
