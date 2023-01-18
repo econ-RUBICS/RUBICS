@@ -362,6 +362,9 @@ def weight_matrix_incomes():
     ROWS = len(DA_table)
     COLS = len(DA_table[1])
 
+    if len(income_table) < len(DA_table):
+        income_table = DA_table
+
     ciwm_DA_table = DA_table
     new_income_table = income_table
     # Build the income weight matrix table for inputs.
@@ -1336,10 +1339,10 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     # Add a zero benefits and costs line to the display table for each scenario to assist with handling null cases
     for scn in range(0, n_scenarios + 1):
         display_table_null = pd.DataFrame(
-            [[scn, '', '', 'Costs', '', '', '', 0],
-             [scn, '', '', 'Benefits', '', '', '', 0]],
+            [[scn, '', '', 'Costs', '', '', '',1.0, 0],
+             [scn, '', '', 'Benefits', '', '', '',1.0, 0]],
             columns=['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
-                     'geography', select_col])
+                     'geography', 'weight', select_col])
         display_table = pd.concat([display_table, display_table_null])
 
     if net_scn_z == 'Yes':
@@ -1360,10 +1363,11 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     # Calculate Total Costs
     display_table_costs = display_table.loc[(((display_table['type'] == 'Costs') & (display_table[select_col] >= 0)) |
                                             ((display_table['type'] == 'Benefits') & (display_table[select_col] < 0)))]
-
+    #print(display_table_costs.to_string())
     display_table_costs[select_col] = display_table_costs[select_col].abs()
     display_table_costs = pd.pivot_table(display_table_costs, values=select_col, columns=['scenario'],
                                          index=['group_id', 'line_id'], aggfunc=np.sum)
+    #print(display_table_costs.to_string())
 
 
     # Calculate Total Benefits
@@ -2402,7 +2406,6 @@ while True:
                                             (n_simulations, 1))
         # Produce a 2d array where rows=simulation and columns=time
         dr_monte_carlo_array = np.cumprod(1 - np.matmul(dr_monte_carlo_factors, dr_base_array), axis=1)
-        print(dr_monte_carlo_array)
 
         # Prices Array
         reference_price_monte_carlo_table = []
