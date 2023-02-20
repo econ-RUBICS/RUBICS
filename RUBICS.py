@@ -61,7 +61,7 @@ import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.pyplot import savefig
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from janitor import xlsx_table
+from openpyxl import load_workbook
 
 tbar_icon = os.getcwd() + '/RUBICS ICON.ico'
 
@@ -270,8 +270,8 @@ def apply_user_settings():
                             f'scenario_{scn}'].keys():
                             model_events_user_settings.update({f'{k_pair[1]}':
                                                                    str(user_settings['event_model'][f'event_{evt}'][
-                                                                       f'outcome_{out}'][f'scenario_{scn}'][
-                                                                       f'{k_pair[0]}'])})
+                                                                           f'outcome_{out}'][f'scenario_{scn}'][
+                                                                           f'{k_pair[0]}'])})
                     for k_pair in [('period_range', f'-EVENT{evt}_OUTCOME{out}_SCN{scn}_RANGE-'),
                                    ('outcome_weight', f'-EVENT{evt}_OUTCOME{out}_SCN{scn}_WEIGHT-')]:
                         if k_pair[0] in user_settings['event_model'][f'event_{evt}'][f'outcome_{out}'][
@@ -451,8 +451,36 @@ def xlsx_mcpdf_read(source_table, target, row, col):
         target['PDF_median'], target['PDF_sigma'] = pdf_regex
 
 
+def load_xlsx_tables(workbook, sheet):
+    table_dict = {}
+
+    worksheet = workbook[sheet]
+
+    for entry, data_boundary in worksheet.tables.items():
+        # parse the data within the ref boundary
+        data = worksheet[data_boundary]
+        # extract the data
+        # the inner list comprehension gets the values for each cell in the table
+        content = [[cell.value for cell in ent]
+                   for ent in data
+                   ]
+
+        header = content[0]
+
+        # the contents ... excluding the header
+        rest = content[1:]
+
+        # create dataframe with the column names
+        # and pair table name with dataframe
+        df = pd.DataFrame(rest, columns=header)
+        table_dict[entry] = df
+
+    return table_dict
+
+
 def load_settings_xlsx(user_settings_file):
     global user_settings
+    wb = load_workbook(user_settings_file, data_only=True)
     '''
     Note that the xlsx workbooks and tables contain data validation formatting which cannot be translated with openpyxl,
     the user will see the following warnings:
@@ -460,17 +488,13 @@ def load_settings_xlsx(user_settings_file):
     These warnings can be safely ignored. 
     '''
 
-    mc_settings_xlsx = xlsx_table(user_settings_file,
-                                   sheetname='Monte Carlo Settings',
-                                   table='MC_settings')
+    mc_settings_xlsx = load_xlsx_tables(wb, 'Monte Carlo Settings')
 
     user_settings['monte_carlo_settings'] = {}
-    user_settings['monte_carlo_settings']['seed'] = mc_settings_xlsx.loc[0, 'Input']
-    user_settings['monte_carlo_settings']['n_simulations'] = mc_settings_xlsx.loc[1, 'Input']
+    user_settings['monte_carlo_settings']['seed'] = mc_settings_xlsx['MC_settings'].loc[0, 'Input']
+    user_settings['monte_carlo_settings']['n_simulations'] = mc_settings_xlsx['MC_settings'].loc[1, 'Input']
 
-    dr_settings_xlsx = xlsx_table(user_settings_file,
-                                  sheetname='Discount Rate',
-                                  table=['DR_settings', 'DR_steps'])
+    dr_settings_xlsx = load_xlsx_tables(wb, 'Discount Rate')
 
     user_settings['discount_rate_settings'] = {}
     user_settings['discount_rate_settings']['discounting_method'] = dr_settings_xlsx['DR_settings'].loc[0, 'Input']
@@ -482,7 +506,8 @@ def load_settings_xlsx(user_settings_file):
     elif user_settings['discount_rate_settings']['discounting_method'] == 'Stepped':
         user_settings['discount_rate_settings']['dr_step_range'] = dr_settings_xlsx['DR_steps'].dr_step_range.tolist()
         user_settings['discount_rate_settings']['dr_step_rates'] = dr_settings_xlsx['DR_steps'].dr_step_rates.tolist()
-        user_settings['discount_rate_settings']['discount_step_thereafter'] = dr_settings_xlsx['DR_settings'].loc[3, 'Input']
+        user_settings['discount_rate_settings']['discount_step_thereafter'] = dr_settings_xlsx['DR_settings'].loc[
+            3, 'Input']
 
     user_settings['discount_rate_settings']['MC_PDF'] = dr_settings_xlsx['DR_settings'].loc[4, 'Input']
 
@@ -492,9 +517,7 @@ def load_settings_xlsx(user_settings_file):
                     'Input')
 
     user_settings['distribution_analysis_settings'] = {}
-    da_settings_xlsx = xlsx_table(user_settings_file,
-                                  sheetname='Distribution Analysis',
-                                  table=['DA_settings', 'DA_matrix'])
+    da_settings_xlsx = load_xlsx_tables(wb, 'Distribution Analysis')
 
     if da_settings_xlsx['DA_settings'].loc[0, 'Input'] == 'Simple weight matrix':
         user_settings['distribution_analysis_settings']['simple_weight_matrix'] = \
@@ -502,42 +525,47 @@ def load_settings_xlsx(user_settings_file):
     elif da_settings_xlsx['DA_settings'].loc[0, 'Input'] == 'Income weight matrix':
         user_settings['distribution_analysis_settings']['subgroup_average_income'] = \
             [da_settings_xlsx['DA_matrix'].columns.values.tolist()] + da_settings_xlsx['DA_matrix'].values.tolist()
-        user_settings['distribution_analysis_settings']['income_weighting_parameter'] = da_settings_xlsx['DA_settings'].loc[1, 'Input']
-        user_settings['distribution_analysis_settings']['population_average_income'] = da_settings_xlsx['DA_settings'].loc[2, 'Input']
+        user_settings['distribution_analysis_settings']['income_weighting_parameter'] = \
+        da_settings_xlsx['DA_settings'].loc[1, 'Input']
+        user_settings['distribution_analysis_settings']['population_average_income'] = \
+        da_settings_xlsx['DA_settings'].loc[2, 'Input']
 
     user_settings['reference_prices'] = {}
-    pr_settings_xlsx = xlsx_table(user_settings_file,
-                                  sheetname='Reference Prices',
-                                  table=['PR_settings', 'PR_group', 'PR_line'])
+    pr_settings_xlsx = load_xlsx_tables(wb, 'Reference Prices')
 
     user_settings['reference_prices']['country'] = pr_settings_xlsx['PR_settings'].loc[0, 'Input']
     user_settings['reference_prices']['year'] = pr_settings_xlsx['PR_settings'].loc[1, 'Input']
     user_settings['reference_prices']['currency_conversion_range'] = pr_settings_xlsx['PR_settings'].loc[2, 'Input']
     user_settings['reference_prices']['currency_conversion_measure'] = pr_settings_xlsx['PR_settings'].loc[3, 'Input']
 
-    for grp in range(1, pr_settings_xlsx['PR_group'].index.size+1):
+    for grp in range(1, pr_settings_xlsx['PR_group'].index.size + 1):
         user_settings['reference_prices'][f'price_group_{grp}'] = {}
-        user_settings['reference_prices'][f'price_group_{grp}']['ID'] = pr_settings_xlsx['PR_group'].loc[grp-1, 'group_id']
+        user_settings['reference_prices'][f'price_group_{grp}']['ID'] = pr_settings_xlsx['PR_group'].loc[
+            grp - 1, 'group_id']
         user_settings['reference_prices'][f'price_group_{grp}']['MC_PDF'] = pr_settings_xlsx['PR_group'].loc[
             grp - 1, 'MC_PDF']
         xlsx_mcpdf_read(pr_settings_xlsx['PR_group'],
                         user_settings['reference_prices'][f'price_group_{grp}'],
-                        grp-1,
+                        grp - 1,
                         'PDF_parameters')
         pr_lines = pr_settings_xlsx['PR_line'].loc[(pr_settings_xlsx['PR_line']['group_under'] ==
-                                                    user_settings['reference_prices'][f'price_group_{grp}']['ID'])].reset_index()
-        for lin in range(1, pr_lines.index.size+1):
+                                                    user_settings['reference_prices'][f'price_group_{grp}'][
+                                                        'ID'])].reset_index()
+        for lin in range(1, pr_lines.index.size + 1):
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}'] = {}
-            user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['ID'] = pr_lines.loc[lin-1, 'line_id']
+            user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['ID'] = pr_lines.loc[
+                lin - 1, 'line_id']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['units'] = pr_lines.loc[
                 lin - 1, 'units']
-            user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['nominal_value'] = pr_lines.loc[
+            user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['nominal_value'] = \
+            pr_lines.loc[
                 lin - 1, 'nominal_value']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['currency'] = pr_lines.loc[
                 lin - 1, 'currency']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['value_year'] = pr_lines.loc[
                 lin - 1, 'value_year']
-            user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['adjustment_factor'] = pr_lines.loc[
+            user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['adjustment_factor'] = \
+            pr_lines.loc[
                 lin - 1, 'adjustment_factor']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['MC_PDF'] = pr_lines.loc[
                 lin - 1, 'MC_PDF']
@@ -549,34 +577,36 @@ def load_settings_xlsx(user_settings_file):
                 lin - 1, 'comments']
 
     user_settings['event_model'] = {}
-    em_settings_xlsx = xlsx_table(user_settings_file,
-                                  sheetname='Event Model')
-    for event in range(1, em_settings_xlsx['Event_settings'].index.size+1):
+    em_settings_xlsx = load_xlsx_tables(wb, 'Event Model')
+
+    for event in range(1, em_settings_xlsx['Event_settings'].index.size + 1):
         user_settings['event_model'][f'event_{event}'] = {}
-        user_settings['event_model'][f'event_{event}']['ID'] = em_settings_xlsx['Event_settings'].loc[event-1, 'event_id']
+        user_settings['event_model'][f'event_{event}']['ID'] = em_settings_xlsx['Event_settings'].loc[
+            event - 1, 'event_id']
         if em_settings_xlsx['Event_settings'].loc[event - 1, 'event_depends'] is not None:
             user_settings['event_model'][f'event_{event}']['event_depends'] = [em_settings_xlsx['Event_settings'].loc[
-                                                                       event - 1, 'event_depends']]
+                                                                                   event - 1, 'event_depends']]
         else:
             user_settings['event_model'][f'event_{event}']['event_depends'] = []
 
         out_table = em_settings_xlsx['Outcome_settings0'].loc[(
-                    em_settings_xlsx['Outcome_settings0']['event_under'] ==
-                    user_settings['event_model'][f'event_{event}']['ID'])].reset_index()
+                em_settings_xlsx['Outcome_settings0']['event_under'] ==
+                user_settings['event_model'][f'event_{event}']['ID'])].reset_index()
 
         for out in range(1, out_table.index.size + 1):
             user_settings['event_model'][f'event_{event}'][f'outcome_{out}'] = {}
-            user_settings['event_model'][f'event_{event}'][f'outcome_{out}']['ID'] = em_settings_xlsx['Outcome_settings0'].loc[out-1, 'outcome_id']
+            user_settings['event_model'][f'event_{event}'][f'outcome_{out}']['ID'] = em_settings_xlsx['Outcome_settings0'].loc[out - 1, 'outcome_id']
             out_scn = 0
 
             while f'Outcome_settings{out_scn}' in em_settings_xlsx:
                 out_table = em_settings_xlsx[f'Outcome_settings{out_scn}'].loc[(
-                    em_settings_xlsx[f'Outcome_settings{out_scn}']['event_under'] ==
-                    user_settings['event_model'][f'event_{event}']['ID'])].reset_index()
+                        em_settings_xlsx[f'Outcome_settings{out_scn}']['event_under'] ==
+                        user_settings['event_model'][f'event_{event}']['ID'])].reset_index()
 
                 user_settings['event_model'][f'event_{event}'][f'outcome_{out}'][f'scenario_{out_scn}'] = {}
-                user_settings['event_model'][f'event_{event}'][f'outcome_{out}'][f'scenario_{out_scn}']['period_range'] = \
-                    ast.literal_eval(out_table.loc[out -1, 'period_range'])
+                user_settings['event_model'][f'event_{event}'][f'outcome_{out}'][f'scenario_{out_scn}'][
+                    'period_range'] = \
+                    ast.literal_eval(out_table.loc[out - 1, 'period_range'])
                 user_settings['event_model'][f'event_{event}'][f'outcome_{out}'][f'scenario_{out_scn}'][
                     'outcome_weight'] = ast.literal_eval(out_table.loc[out - 1, 'outcome_weight'])
                 user_settings['event_model'][f'event_{event}'][f'outcome_{out}'][f'scenario_{out_scn}'][
@@ -586,19 +616,20 @@ def load_settings_xlsx(user_settings_file):
                 out_scn += 1
 
     user_settings['quantity_scenarios'] = {}
-    qs_settings_xlsx = xlsx_table(user_settings_file,
-                                  sheetname='Quantity Scenarios')
+    qs_settings_xlsx = load_xlsx_tables(wb, 'Quantity Scenarios')
 
     qnt_scn = 0
     while f'QS_settings{qnt_scn}' in qs_settings_xlsx:
         user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'] = {}
-        user_settings['quantity_scenarios'][f'scenario_{qnt_scn}']['scenario_description'] = qs_settings_xlsx[f'QS_settings{qnt_scn}'].loc[1, 'Input']
+        user_settings['quantity_scenarios'][f'scenario_{qnt_scn}']['scenario_description'] = \
+        qs_settings_xlsx[f'QS_settings{qnt_scn}'].loc[1, 'Input']
 
-        for qnt_grp in range(1, qs_settings_xlsx[f'QS_group{qnt_scn}'].index.size +1):
+        for qnt_grp in range(1, qs_settings_xlsx[f'QS_group{qnt_scn}'].index.size + 1):
             user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'] = {}
             user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}']['ID'] = \
-                qs_settings_xlsx[f'QS_group{qnt_scn}'].loc[qnt_grp-1, 'group_id']
-            user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}']['group_value_type'] = \
+                qs_settings_xlsx[f'QS_group{qnt_scn}'].loc[qnt_grp - 1, 'group_id']
+            user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
+                'group_value_type'] = \
                 qs_settings_xlsx[f'QS_group{qnt_scn}'].loc[qnt_grp - 1, 'group_type']
             user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
                 'MC_PDF'] = qs_settings_xlsx[f'QS_group{qnt_scn}'].loc[qnt_grp - 1, 'MC_PDF']
@@ -606,21 +637,28 @@ def load_settings_xlsx(user_settings_file):
                             user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'],
                             qnt_grp - 1,
                             'PDF_parameters')
-            qnt_lin_table = qs_settings_xlsx[f'QS_line{qnt_scn}'].loc[(qs_settings_xlsx[f'QS_line{qnt_scn}']['group_under'] == user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}']['ID'])].reset_index()
-            for qnt_lin in range(1, qnt_lin_table.index.size +1):
-                user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][f'quantity_line_{qnt_lin}'] = {}
+            qnt_lin_table = qs_settings_xlsx[f'QS_line{qnt_scn}'].loc[(
+                        qs_settings_xlsx[f'QS_line{qnt_scn}']['group_under'] ==
+                        user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
+                            'ID'])].reset_index()
+            for qnt_lin in range(1, qnt_lin_table.index.size + 1):
                 user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
-                    f'quantity_line_{qnt_lin}']['ID'] = qnt_lin_table.loc[qnt_lin-1, 'line_id']
+                    f'quantity_line_{qnt_lin}'] = {}
+                user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
+                    f'quantity_line_{qnt_lin}']['ID'] = qnt_lin_table.loc[qnt_lin - 1, 'line_id']
                 user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
                     f'quantity_line_{qnt_lin}']['value'] = qnt_lin_table.loc[qnt_lin - 1, 'value']
                 user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
                     f'quantity_line_{qnt_lin}']['geographic_zone'] = qnt_lin_table.loc[qnt_lin - 1, 'geographic_zone']
                 user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
-                    f'quantity_line_{qnt_lin}']['stakeholder_group'] = qnt_lin_table.loc[qnt_lin - 1, 'stakeholder_group']
+                    f'quantity_line_{qnt_lin}']['stakeholder_group'] = qnt_lin_table.loc[
+                    qnt_lin - 1, 'stakeholder_group']
                 user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
-                    f'quantity_line_{qnt_lin}']['period_range'] = ast.literal_eval(qnt_lin_table.loc[qnt_lin - 1, 'period_range'])
+                    f'quantity_line_{qnt_lin}']['period_range'] = ast.literal_eval(
+                    qnt_lin_table.loc[qnt_lin - 1, 'period_range'])
                 user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
-                    f'quantity_line_{qnt_lin}']['quantity'] = ast.literal_eval(qnt_lin_table.loc[qnt_lin - 1, 'quantity'])
+                    f'quantity_line_{qnt_lin}']['quantity'] = ast.literal_eval(
+                    qnt_lin_table.loc[qnt_lin - 1, 'quantity'])
                 user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
                     f'quantity_line_{qnt_lin}']['MC_PDF'] = qnt_lin_table.loc[qnt_lin - 1, 'MC_PDF']
                 xlsx_mcpdf_read(qnt_lin_table,
@@ -739,7 +777,8 @@ def json_settings():
                 values[f'-SCN{scn}_QG{grp}_GRP_TYPE-']
             quantity_scenarios_dict[f'scenario_{scn}'][f'quantity_group_{grp}']['MC_PDF'] = \
                 values[f'-SCN{scn}_QG{grp}_MC_TYPE-']
-            extract_pdf_settings(quantity_scenarios_dict[f'scenario_{scn}'][f'quantity_group_{grp}'], f'-SCN{scn}_QG{grp}')
+            extract_pdf_settings(quantity_scenarios_dict[f'scenario_{scn}'][f'quantity_group_{grp}'],
+                                 f'-SCN{scn}_QG{grp}')
             for lin in range(1, qs_group_dict[grp] + 1):
                 quantity_scenarios_dict[f'scenario_{scn}'][f'quantity_group_{grp}'][f'quantity_line_{lin}'] = {}
                 quantity_scenarios_dict[f'scenario_{scn}'][f'quantity_group_{grp}'][f'quantity_line_{lin}']['ID'] = \
@@ -2189,7 +2228,7 @@ def loop_result_window_events(run):
             sg.popup_quick_message(f'ERROR:\n{e}')
 
     if run_event == f'-RUN{run}_EXPORT_SIMS-':
-        #Add simulation run numbers to table and then explode to separate rows.
+        # Add simulation run numbers to table and then explode to separate rows.
         try:
             run_results[run]['sim_n'] = run_results[run].group.apply(lambda x: np.arange(0, n_simulations, 1))
             run_results[run].explode(column=['line_monte_carlo_sims',
@@ -2202,10 +2241,11 @@ def loop_result_window_events(run):
                                              'discounted_quantity_value_stream',
                                              'nominal_total_value',
                                              'discounted_total_value',
-                                             'sim_n']).to_csv(path_or_buf=sg.popup_get_file(message='Filepath to save as:',
-                                                                       file_types=(('CSV', '*.csv'),),
-                                                                       default_extension='*.csv',
-                                                                       save_as=True))
+                                             'sim_n']).to_csv(
+                path_or_buf=sg.popup_get_file(message='Filepath to save as:',
+                                              file_types=(('CSV', '*.csv'),),
+                                              default_extension='*.csv',
+                                              save_as=True))
         except Exception as e:
             sg.popup_quick_message(f'ERROR:\n{e}')
 
@@ -2406,9 +2446,9 @@ while True:
 
     if event == 'Save Settings':
         file_to_save = open(sg.popup_get_file(message='Filepath to save as:',
-                                                  file_types=(('JSON', '*.json'),),
-                                                  save_as=True),
-                                'w')
+                                              file_types=(('JSON', '*.json'),),
+                                              save_as=True),
+                            'w')
         file_to_save.write(json_settings())
 
     ### DISCOUNT RATE EVENTS ------------------------------------------------------------------------------------------
@@ -2627,7 +2667,8 @@ while True:
             for grp in range(1, len(qs_group_dict) + 1):
                 for lin in range(1, qs_group_dict[grp] + 1):
                     price_group_line = [int(g) for g in re.findall(r'\d+', next(
-                        key for key, value in values.items() if value == values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRICE-'] and key[0:3] == '-PG'))]
+                        key for key, value in values.items() if
+                        value == values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRICE-'] and key[0:3] == '-PG'))]
                     try:
                         price_unit_text = str(
                             np.around(MC_holding_dict[f'-PG{price_group_line[0]}_LIN{price_group_line[1]}_RAV_FULL-'],
@@ -2903,7 +2944,7 @@ while True:
                                      var_name='geography')
             DA_frame = pd.concat([DA_frame, DA_frame_items])
         quantity_stream_table = pd.merge(quantity_stream_table, DA_frame, how='left', on=['stakeholder', 'geography'])
-        #print(quantity_stream_table.to_string())
+        # print(quantity_stream_table.to_string())
         run_number += 1
         result_windows[run_number] = result_popup(run_number)
         plot_histo_cdf(run_number,
