@@ -1,6 +1,36 @@
 # RUBICS
 RUBICS (RUB/CS): Random Uncertainty Benefit / Cost Simulator is an open source program to undertake Monte Carlo and Distributional Benefit-Cost Analysis, enabling easy peer review of inputs and results.
 
+RUBICSv0.2.0 Changelog
+1. New feature allowing parameters to be defined and used as inputs in price and quantity equations. 
+
+2. New feature allowing the user to specify a custom PDF from an array of x and y points using linear interpolation.
+
+3. Changed the way percentiles are displayed for the result readouts to calculate a 'point median percentile' rather than use actual percentiles to minimise the risk that extreme line values are displayed. 
+
+4. Fixed a calculation error in the discount rate formula.
+
+5. Fixed a bug in the calculation of the total number of periods exlcuding the last period.
+
+6. Fixed a bug in the report generation that threw an alert when no distribution analysis table is found. 
+
+7. Fixed a bug that made the exporting data to CSV fail when there is no event model. 
+
+8. Ensured that when new quantity scenario lines are added all values and distribution analysis lists are available.
+
+9. New feature enabling random price/quantity factors to be generated in each period. 
+
+10. Changed layout of reference price section to be more compact. 
+
+11. Fixed an issue where calculating result tables returned SettingWithCopy warnings due to ambiguous dataframes. In this instance, setting values based on a copy of the original is the expected behaviour. 
+
+12. Fixed a bug that caused the old Monte Carlo settings to fail to load into the dialogue box when updating.
+
+13. Made it so that the main window updates properly to display the PDF settings on load.
+
+14. Fixed bug with the calculation of random variables with the Tirangualr and PERT distributions.
+
+
 RUBICSv0.1.1 Changelog
 
 1. Fixed a bug that caused simple weights to be returned as strings instead of floats. 
