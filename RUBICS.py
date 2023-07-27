@@ -4,7 +4,7 @@ RUBICS is intended to be an Open Source program for economists to undertake Mont
 Analysis, enabling the sharing and peer review of inputs and outputs.
 Copyright (C) 2023
 Author: Samuel Miller
-Version: BETA (0.1.1)
+Version: BETA (0.2.0)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ Version: BETA (0.1.1)
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Author: Samuel Miller
-Email: the.5th.hour@gmail.com
+Email: smiller.econ@gmail.com
 In Memoriam: Timothy Miller (1996-2012) & James Miller (1994-2022)
 
 The File is organised into sections:
@@ -52,6 +52,8 @@ from scipy.stats import truncnorm
 from scipy.stats import foldnorm
 from scipy.stats import expon
 from scipy.stats import lognorm
+from scipy.stats import rv_continuous
+from scipy import interpolate
 from json import (load as jsonload, dumps as jsondumps, dump as jsondump)
 import os
 import datetime as dt
@@ -62,6 +64,7 @@ from matplotlib.figure import Figure
 from matplotlib.pyplot import savefig
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from openpyxl import load_workbook
+
 
 tbar_icon = os.getcwd() + '/RUBICS ICON.ico'
 
@@ -78,7 +81,7 @@ tbar_icon = os.getcwd() + '/RUBICS ICON.ico'
 user_settings = {}
 new_values = {}
 event_list = []
-
+MC_update_display = []
 
 def apply_user_settings():
     global DA_table
@@ -87,6 +90,8 @@ def apply_user_settings():
     global income_weight_parameter
     global n_pr_groups
     global n_scenarios
+    global n_params
+    global MC_update_display
 
     # Add the discount rate data from the user_settings_file to the layout.
     if 'discount_rate_settings' in user_settings.keys():
@@ -105,10 +110,13 @@ def apply_user_settings():
             for k_pair in [('PDF_min', '-DR_PDFMIN-'), ('PDF_max', '-DR_PDFMAX-'), ('PDF_mean', '-DR_PDFMEA-'),
                            ('PDF_stdev', '-DR_PDFSIG-'), ('PDF_mode', '-DR_PDFMOD-'), ('PDF_median', '-DR_PDFMED-'),
                            ('PDF_shape', '-DR_PDFSHA-'), ('PDF_scale', '-DR_PDFSCA-'),
-                           ('PDF_lambda', '-DR_PDFRAT-')]:
+                           ('PDF_lambda', '-DR_PDFRAT-'), ('PDF_rand_each_t', '-DR_PDF_REACHT-'),
+                           ('PDF_Xs', '-DR_PDFX-'), ('PDF_Ys', '-DR_PDFY-')]:
                 if k_pair[0] in user_settings['discount_rate_settings'].keys():
                     MC_holding_dict.update(
                         {f'{k_pair[1]}': user_settings['discount_rate_settings'][f'{k_pair[0]}']})
+            if user_settings['discount_rate_settings']['MC_PDF'] != 'None':
+                MC_update_display.append('-DR_MC_TYPE-')
 
     # Add the distribution analysis data from the user_settings_file to the layout
     if 'distribution_analysis_settings' in user_settings.keys():
@@ -135,6 +143,46 @@ def apply_user_settings():
                         DA_table[i][j] = (pop_mean_income / income_table[i][j]) ** income_weight_parameter
                     except (ZeroDivisionError, ValueError):
                         DA_table[i][j] = np.nan
+
+    # Add the parameters from the user_settings file to the layout
+    if 'parameters' in user_settings.keys():
+        # Get a list of parameters given in the user_settings_file
+        par_list_user_settings = [k for k in list(user_settings['parameters'].keys()) if 'parameter_' in k]
+        par_list_user_settings_ints = list(map(int, [k.replace('parameter_', '') for k in par_list_user_settings]))
+
+        for par in par_list_user_settings_ints:
+            # Add missing parameter fields to the layout if needed
+            while n_params < par:
+                n_params += 1
+                add_parameter()
+                if window['-PAR_COLS-'].get_size()[1] < 700:
+                    resize = 280 + window['-PAR_COLS-'].get_size()[1]
+                    set_size(window['-PAR_COLS-'], (None, resize))
+                window.refresh()
+                window['-PAR_COLS-'].contents_changed()
+
+            # Add parameter data from the user_settings_file to the layout
+            for k_pair in [('ID', f'-PAR{par}_ID-'),  ("MC_PDF", f'-PAR{par}_MC_TYPE-'),
+                           ('comments', f'-PAR{par}_CM-')]:
+                if k_pair[0] in user_settings['parameters'][f'parameter_{par}'].keys():
+                    window[f'{k_pair[1]}'].update(user_settings['parameters'][f'parameter_{par}'][f'{k_pair[0]}'])
+            for k_pair in [('period_range', f'-PAR{par}_PRANGE-'),
+                           ('value', f'-PAR{par}_PVALUE-')]:
+                if k_pair[0] in user_settings['parameters'][f'parameter_{par}'].keys():
+                    window[f'{k_pair[1]}'].update('\n'.join(user_settings['parameters'][f'parameter_{par}'][f'{k_pair[0]}']))
+            if 'MC_PDF' in user_settings['parameters'][f'parameter_{par}'].keys():
+                for k_pair in [('PDF_min', f'-PAR{par}_PDFMIN-'), ('PDF_max', f'-PAR{par}_PDFMAX-'),
+                               ('PDF_mean', f'-PAR{par}_PDFMEA-'), ('PDF_stdev', f'-PAR{par}_PDFSIG-'),
+                               ('PDF_mode', f'-PAR{par}_PDFMOD-'), ('PDF_median', f'-PAR{par}_PDFMED-'),
+                               ('PDF_shape', f'-PAR{par}_PDFSHA-'), ('PDF_scale', f'-PAR{par}_PDFSCA-'),
+                               ('PDF_lambda', f'-PAR{par}_PDFRAT-'), ('PDF_rand_each_t', f'-PAR{par}_PDF_REACHT-'),
+                               ('PDF_Xs', f'-PAR{par}_PDFX-'), ('PDF_Ys', f'-PAR{par}_PDFY-')]:
+                    if k_pair[0] in user_settings['parameters'][f'parameter_{par}'].keys():
+                        MC_holding_dict.update({f'{k_pair[1]}':
+                                                    user_settings['parameters'][f'parameter_{par}'][
+                                                        f'{k_pair[0]}']})
+                if user_settings['parameters'][f'parameter_{par}']['MC_PDF'] != 'None':
+                    MC_update_display.append(f'-PAR{par}_MC_TYPE-')
 
     # Add the global reference prices data from the user_settings_file to the layout.
     if 'reference_prices' in user_settings.keys():
@@ -175,11 +223,14 @@ def apply_user_settings():
                                ('PDF_mean', f'-PG{grp}_PDFMEA-'), ('PDF_stdev', f'-PG{grp}_PDFSIG-'),
                                ('PDF_mode', f'-PG{grp}_PDFMOD-'), ('PDF_median', f'-PG{grp}_PDFMED-'),
                                ('PDF_shape', f'-PG{grp}_PDFSHA-'), ('PDF_scale', f'-PG{grp}_PDFSCA-'),
-                               ('PDF_lambda', f'-PG{grp}_PDFRAT-')]:
+                               ('PDF_lambda', f'-PG{grp}_PDFRAT-'), ('PDF_rand_each_t', f'-PG{grp}_PDF_REACHT-'),
+                               ('PDF_Xs', f'-PG{grp}_PDFX-'), ('PDF_Ys', f'-PG{grp}_PDFY-')]:
                     if k_pair[0] in user_settings['reference_prices'][f'price_group_{grp}'].keys():
                         MC_holding_dict.update({f'{k_pair[1]}':
                                                     user_settings['reference_prices'][f'price_group_{grp}'][
                                                         f'{k_pair[0]}']})
+                if user_settings['reference_prices'][f'price_group_{grp}']['MC_PDF'] != 'None':
+                    MC_update_display.append(f'-PG{grp}_MC_TYPE-')
 
             # Get a list of price lines in the price groups given in the user_settings_file
             pg_lines_list_user_settings = [k for k in
@@ -221,12 +272,16 @@ def apply_user_settings():
                                    ('PDF_median', f'-PG{grp}_LIN{lin}_PDFMED-'),
                                    ('PDF_shape', f'-PG{grp}_LIN{lin}_PDFSHA-'),
                                    ('PDF_scale', f'-PG{grp}_LIN{lin}_PDFSCA-'),
-                                   ('PDF_lambda', f'-PG{grp}_LIN{lin}_PDFRAT-')]:
+                                   ('PDF_lambda', f'-PG{grp}_LIN{lin}_PDFRAT-'),
+                                   ('PDF_rand_each_t', f'-PG{grp}_LIN{lin}_PDF_REACHT-'),
+                                   ('PDF_Xs', f'-PG{grp}_LIN{lin}_PDFX-'), ('PDF_Ys', f'-PG{grp}_LIN{lin}_PDFY-')]:
                         if k_pair[0] in user_settings['reference_prices'][f'price_group_{grp}'][
                             f'price_line_{lin}'].keys():
                             MC_holding_dict.update({f'{k_pair[1]}':
                                                         user_settings['reference_prices'][f'price_group_{grp}'][
                                                             f'price_line_{lin}'][f'{k_pair[0]}']})
+                    if user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['MC_PDF'] != 'None':
+                        MC_update_display.append(f'-PG{grp}_LIN{lin}_MC_TYPE-')
 
     # Event Model Settings
     if 'event_model' in user_settings.keys():
@@ -337,13 +392,18 @@ def apply_user_settings():
                                    ('PDF_median', f'-SCN{scn}_QG{grp}_PDFMED-'),
                                    ('PDF_shape', f'-SCN{scn}_QG{grp}_PDFSHA-'),
                                    ('PDF_scale', f'-SCN{scn}_QG{grp}_PDFSCA-'),
-                                   ('PDF_lambda', f'-SCN{scn}_QG{grp}_PDFRAT-')]:
+                                   ('PDF_lambda', f'-SCN{scn}_QG{grp}_PDFRAT-'),
+                                   ('PDF_rand_each_t', f'-SCN{scn}_QG{grp}_PDF_REACHT-'),
+                                   ('PDF_Xs', f'-SCN{scn}_QG{grp}_PDFX-'), ('PDF_Ys', f'-SCN{scn}_QG{grp}_PDFY-')]:
                         if k_pair[0] in user_settings['quantity_scenarios'][f'scenario_{scn}'][
                             f'quantity_group_{grp}'].keys():
                             MC_holding_dict.update({f'{k_pair[1]}':
                                                         user_settings['quantity_scenarios'][f'scenario_{scn}'][
                                                             f'quantity_group_{grp}'][f'{k_pair[0]}']})
                             # MC_holding_dict = get_pdf_settings(f'-SCN{scn}_QG{grp}_MC_TYPE-', True)
+                    if user_settings['quantity_scenarios'][f'scenario_{scn}'][
+                            f'quantity_group_{grp}']['MC_PDF'] != 'None':
+                        MC_update_display.append(f'-SCN{scn}_QG{grp}_MC_TYPE-')
 
                 # Get a list of price lines in the price groups given in the user_settings_file
                 qs_lines_list_user_settings = [k for k in list(
@@ -392,7 +452,10 @@ def apply_user_settings():
                                        ('PDF_median', f'-SCN{scn}_QG{grp}_LIN{lin}_PDFMED-'),
                                        ('PDF_shape', f'-SCN{scn}_QG{grp}_LIN{lin}_PDFSHA-'),
                                        ('PDF_scale', f'-SCN{scn}_QG{grp}_LIN{lin}_PDFSCA-'),
-                                       ('PDF_lambda', f'-SCN{scn}_QG{grp}_LIN{lin}_PDFRAT-')]:
+                                       ('PDF_lambda', f'-SCN{scn}_QG{grp}_LIN{lin}_PDFRAT-'),
+                                       ('PDF_rand_each_t', f'-SCN{scn}_QG{grp}_LIN{lin}_PDF_REACHT-'),
+                                       ('PDF_Xs', f'-SCN{scn}_QG{grp}_LIN{lin}_PDFX-'),
+                                       ('PDF_Ys', f'-SCN{scn}_QG{grp}_LIN{lin}_PDFY-')]:
                             if k_pair[0] in \
                                     user_settings['quantity_scenarios'][f'scenario_{scn}'][f'quantity_group_{grp}'][
                                         f'quantity_line_{lin}'].keys():
@@ -400,6 +463,9 @@ def apply_user_settings():
                                                             user_settings['quantity_scenarios'][f'scenario_{scn}'][
                                                                 f'quantity_group_{grp}'][f'quantity_line_{lin}'][
                                                                 f'{k_pair[0]}']})
+                        if user_settings['quantity_scenarios'][f'scenario_{scn}'][f'quantity_group_{grp}'][
+                                        f'quantity_line_{lin}']['MC_PDF'] != 'None':
+                            MC_update_display.append(f'-SCN{scn}_QG{grp}_LIN{lin}_MC_TYPE-')
 
     if "monte_carlo_settings" in user_settings.keys():
         for k_pair in [('seed', '-RES_SET_SEED-'),
@@ -435,20 +501,25 @@ def xlsx_mcpdf_read(source_table, target, row, col):
 
     pdf_regex = []
     if target['MC_PDF'] != 'None':
-        pdf_regex = re.findall(r'\d+[.]?\d*', source_table.loc[row, col])
+        pdf_regex = re.findall(r'\d+[.]?\d*|\w+', source_table.loc[row, col])
+    if len(pdf_regex) > 0:
+        if pdf_regex[-1] == 'true':
+            pdf_regex[-1] = True
+        elif pdf_regex[-1] == 'false':
+            pdf_regex[-1] = False
 
     if target['MC_PDF'] in ['Uniform', 'Bounded normal-like']:
-        target['PDF_min'], target['PDF_max'] = pdf_regex
+        target['PDF_min'], target['PDF_max'], target['PDF_rand_each_t'] = pdf_regex
     elif target['MC_PDF'] in ['Triangular', 'PERT']:
-        target['PDF_min'], target['PDF_mode'], target['PDF_max'] = pdf_regex
+        target['PDF_min'], target['PDF_mode'], target['PDF_max'], target['PDF_rand_each_t'] = pdf_regex
     elif target['MC_PDF'] in ['Folded normal', 'Truncated normal']:
-        target['PDF_mean'], target['PDF_sigma'] = pdf_regex
+        target['PDF_mean'], target['PDF_sigma'], target['PDF_rand_each_t'] = pdf_regex
     elif target['MC_PDF'] == 'Exponential':
-        target['PDF_lambda'], = pdf_regex
+        target['PDF_lambda'], target['PDF_rand_each_t'] = pdf_regex
     elif target['MC_PDF'] == 'Log-logistic':
-        target['PDF_median'], target['PDF_shape'] = pdf_regex
+        target['PDF_median'], target['PDF_shape'], target['PDF_rand_each_t'] = pdf_regex
     elif target['MC_PDF'] == 'Log-normal':
-        target['PDF_median'], target['PDF_sigma'] = pdf_regex
+        target['PDF_median'], target['PDF_sigma'], target['PDF_rand_each_t'] = pdf_regex
 
 
 def load_xlsx_tables(workbook, sheet):
@@ -526,9 +597,25 @@ def load_settings_xlsx(user_settings_file):
         user_settings['distribution_analysis_settings']['subgroup_average_income'] = \
             [da_settings_xlsx['DA_matrix'].columns.values.tolist()] + da_settings_xlsx['DA_matrix'].values.tolist()
         user_settings['distribution_analysis_settings']['income_weighting_parameter'] = \
-        da_settings_xlsx['DA_settings'].loc[1, 'Input']
+            da_settings_xlsx['DA_settings'].loc[1, 'Input']
         user_settings['distribution_analysis_settings']['population_average_income'] = \
-        da_settings_xlsx['DA_settings'].loc[2, 'Input']
+            da_settings_xlsx['DA_settings'].loc[2, 'Input']
+
+    user_settings['parameters'] = {}
+    par_settings_xlsx = load_xlsx_tables(wb, 'Parameters')
+
+    for par in range(1, par_settings_xlsx['Parameter_settings'].index.size +1):
+        user_settings['parameters'][f'parameter_{par}'] = {}
+        user_settings['parameters'][f'parameter_{par}']['ID'] = par_settings_xlsx['Parameter_settings'].loc[par-1, 'parameter_id']
+        user_settings['parameters'][f'parameter_{par}']['period_range'] = ast.literal_eval(par_settings_xlsx['Parameter_settings'].loc[par-1, 'period_range'])
+        user_settings['parameters'][f'parameter_{par}']['value'] = ast.literal_eval(par_settings_xlsx['Parameter_settings'].loc[par-1, 'value'])
+        user_settings['parameters'][f'parameter_{par}']['MC_PDF'] = par_settings_xlsx['Parameter_settings'].loc[
+            par - 1, 'MC_PDF']
+        user_settings['parameters'][f'parameter_{par}']['comments'] = par_settings_xlsx['Parameter_settings'].loc[par-1, 'comments']
+        xlsx_mcpdf_read(par_settings_xlsx['Parameter_settings'],
+                        user_settings['parameters'][f'parameter_{par}'],
+                        par - 1,
+                        'PDF_parameters')
 
     user_settings['reference_prices'] = {}
     pr_settings_xlsx = load_xlsx_tables(wb, 'Reference Prices')
@@ -558,15 +645,15 @@ def load_settings_xlsx(user_settings_file):
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['units'] = pr_lines.loc[
                 lin - 1, 'units']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['nominal_value'] = \
-            pr_lines.loc[
-                lin - 1, 'nominal_value']
+                pr_lines.loc[
+                    lin - 1, 'nominal_value']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['currency'] = pr_lines.loc[
                 lin - 1, 'currency']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['value_year'] = pr_lines.loc[
                 lin - 1, 'value_year']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['adjustment_factor'] = \
-            pr_lines.loc[
-                lin - 1, 'adjustment_factor']
+                pr_lines.loc[
+                    lin - 1, 'adjustment_factor']
             user_settings['reference_prices'][f'price_group_{grp}'][f'price_line_{lin}']['MC_PDF'] = pr_lines.loc[
                 lin - 1, 'MC_PDF']
             xlsx_mcpdf_read(pr_lines,
@@ -595,7 +682,8 @@ def load_settings_xlsx(user_settings_file):
 
         for out in range(1, out_table.index.size + 1):
             user_settings['event_model'][f'event_{event}'][f'outcome_{out}'] = {}
-            user_settings['event_model'][f'event_{event}'][f'outcome_{out}']['ID'] = em_settings_xlsx['Outcome_settings0'].loc[out - 1, 'outcome_id']
+            user_settings['event_model'][f'event_{event}'][f'outcome_{out}']['ID'] = \
+                out_table.loc[out - 1, 'outcome_id']
             out_scn = 0
 
             while f'Outcome_settings{out_scn}' in em_settings_xlsx:
@@ -622,7 +710,7 @@ def load_settings_xlsx(user_settings_file):
     while f'QS_settings{qnt_scn}' in qs_settings_xlsx:
         user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'] = {}
         user_settings['quantity_scenarios'][f'scenario_{qnt_scn}']['scenario_description'] = \
-        qs_settings_xlsx[f'QS_settings{qnt_scn}'].loc[1, 'Input']
+            qs_settings_xlsx[f'QS_settings{qnt_scn}'].loc[1, 'Input']
 
         for qnt_grp in range(1, qs_settings_xlsx[f'QS_group{qnt_scn}'].index.size + 1):
             user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'] = {}
@@ -638,9 +726,9 @@ def load_settings_xlsx(user_settings_file):
                             qnt_grp - 1,
                             'PDF_parameters')
             qnt_lin_table = qs_settings_xlsx[f'QS_line{qnt_scn}'].loc[(
-                        qs_settings_xlsx[f'QS_line{qnt_scn}']['group_under'] ==
-                        user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
-                            'ID'])].reset_index()
+                    qs_settings_xlsx[f'QS_line{qnt_scn}']['group_under'] ==
+                    user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
+                        'ID'])].reset_index()
             for qnt_lin in range(1, qnt_lin_table.index.size + 1):
                 user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
                     f'quantity_line_{qnt_lin}'] = {}
@@ -666,6 +754,9 @@ def load_settings_xlsx(user_settings_file):
                                     f'quantity_line_{qnt_lin}'],
                                 qnt_lin - 1,
                                 'PDF_parameters')
+                user_settings['quantity_scenarios'][f'scenario_{qnt_scn}'][f'quantity_group_{qnt_grp}'][
+                    f'quantity_line_{qnt_lin}']['outcome_dependency'] = qnt_lin_table.loc[
+                    qnt_lin - 1, 'outcome_dependency']
 
         qnt_scn += 1
 
@@ -677,7 +768,8 @@ def extract_pdf_settings(setting_dict, prefix):
                  ('PDF_stdev', f'{prefix}_PDFSIG-'), ('PDF_mode', f'{prefix}_PDFMOD-'),
                  ('PDF_median', f'{prefix}_PDFMED-'),
                  ('PDF_shape', f'{prefix}_PDFSHA-'), ('PDF_scale', f'{prefix}_PDFSCA-'),
-                 ('PDF_lambda', f'{prefix}_PDFRAT-')]
+                 ('PDF_lambda', f'{prefix}_PDFRAT-'), ('PDF_rand_each_t', f'{prefix}_PDF_REACHT-'),
+                 ('PDF_Xs', f'{prefix}_PDFX-'), ('PDF_Ys', f'{prefix}_PDFY-')]
 
     for pair in pdf_pairs:
         if pair[1] in MC_holding_dict:
@@ -688,9 +780,11 @@ def json_settings():
     monte_carlo_dict = {}
     discount_rate_dict = {}
     distribution_dict = {}
+    parameter_dict_j = {}
     reference_prices_dict = {}
     event_model_dict = {}
     quantity_scenarios_dict = {}
+    # parameter_dict is used elsewhere and is a very important variable, parameter_dict_j is used here to maintain hygiene.
 
     monte_carlo_dict['seed'] = int(values['-RES_SET_SEED-'])
     monte_carlo_dict['n_simulations'] = int(values['-RES_NUM_SIMS-'])
@@ -717,23 +811,35 @@ def json_settings():
             distribution_dict['subgroup_average_income'] = income_table
             distribution_dict['subgroup_average_income'][0][0] = ''
 
+    if n_params > 0:
+        for par in range(1, n_params+1):
+            parameter_dict_j[f'parameter_{par}'] = {}
+            parameter_dict_j[f'parameter_{par}']['ID'] = values[f'-PAR{par}_ID-']
+            parameter_dict_j[f'parameter_{par}']['period_range'] = values[f'-PAR{par}_PRANGE-']
+            parameter_dict_j[f'parameter_{par}']['values'] = values[f'-PAR{par}_PVALUE-']
+            parameter_dict_j[f'parameter_{par}']['comments'] = values[f'-PAR{par}_CM-']
+            extract_pdf_settings(parameter_dict_j[f'parameter_{par}'], f'-PAR{par}')
+
     reference_prices_dict['country'] = values['-PR_COUNTRY-']
     reference_prices_dict['year'] = values['-PR_YEAR-']
     reference_prices_dict['currency_conversion_range'] = values['-PR_CUR_RANGE-']
     reference_prices_dict['currency_conversion_measure'] = values['-PR_CUR_POINT-']
 
-    for grp in range(1, len(qs_group_dict) + 1):
+    for grp in range(1, len(pr_group_dict) + 1):
         reference_prices_dict[f'price_group_{grp}'] = {}
         reference_prices_dict[f'price_group_{grp}']['ID'] = values[f'-PG{grp}_ID-']
         reference_prices_dict[f'price_group_{grp}']['MC_PDF'] = values[f'-PG{grp}_MC_TYPE-']
         extract_pdf_settings(reference_prices_dict[f'price_group_{grp}'], f'-PG{grp}')
 
-        for lin in range(1, qs_group_dict[grp] + 1):
+        for lin in range(1, pr_group_dict[grp] + 1):
             reference_prices_dict[f'price_group_{grp}'][f'price_line_{lin}'] = {}
             reference_prices_dict[f'price_group_{grp}'][f'price_line_{lin}']['ID'] = values[f'-PG{grp}_LIN{lin}_ID-']
             reference_prices_dict[f'price_group_{grp}'][f'price_line_{lin}']['units'] = values[f'-PG{grp}_LIN{lin}_UN-']
-            reference_prices_dict[f'price_group_{grp}'][f'price_line_{lin}']['nominal_value'] = float(
-                values[f'-PG{grp}_LIN{lin}_NV-'])
+            try:
+                reference_prices_dict[f'price_group_{grp}'][f'price_line_{lin}']['nominal_value'] = float(
+                    values[f'-PG{grp}_LIN{lin}_NV-'])
+            except ValueError:
+                reference_prices_dict[f'price_group_{grp}'][f'price_line_{lin}']['nominal_value'] = values[f'-PG{grp}_LIN{lin}_NV-']
             reference_prices_dict[f'price_group_{grp}'][f'price_line_{lin}']['currency'] = values[
                 f'-PG{grp}_LIN{lin}_CUR-']
             reference_prices_dict[f'price_group_{grp}'][f'price_line_{lin}']['value_year'] = int(
@@ -812,6 +918,7 @@ def json_settings():
         'monte_carlo_settings': monte_carlo_dict,
         'discount_rate_settings': discount_rate_dict,
         'distribution_analysis_settings': distribution_dict,
+        'parameter_settings': parameter_dict_j,
         'reference_prices': reference_prices_dict,
         'event_model': event_model_dict,
         'quantity_scenarios': quantity_scenarios_dict
@@ -835,6 +942,8 @@ def PDF_meantest(PDF_func, key_prefix, values_dictionary):
     PDF_lambda = float(values_dictionary.get(f'{key_prefix}_PDFRAT-', '0'))
     PDF_shape = float(values_dictionary.get(f'{key_prefix}_PDFSHA-', '0'))
     PDF_median = float(values_dictionary.get(f'{key_prefix}_PDFMED-', '0'))
+    PDF_xs = np.array(list(map(float, values_dictionary.get(f'{key_prefix}_PDFX-', '0').split('\n'))))
+    PDF_ys = np.array(list(map(float, values_dictionary.get(f'{key_prefix}_PDFY-', '0').split('\n'))))
 
     if PDF_func == 'Uniform' or PDF_func == 'Bounded normal-like':
         try:
@@ -875,6 +984,15 @@ def PDF_meantest(PDF_func, key_prefix, values_dictionary):
         try:
             return np.around(lognorm.stats(s=PDF_stdev, scale=np.exp(PDF_mean), moments='m'), 3)
         except ValueError:
+            return np.nan
+    elif PDF_func == 'Custom Kinked PDF':
+        try:
+            set_custom_dfs(PDF_xs, PDF_ys)
+            cust_kink = custom_kinks_gen(name='custom_kinks', a=np.min(PDF_xs), b=np.max(PDF_xs))
+            return np.around(mean_df, 3)
+        except ValueError:
+            return np.nan
+        except IndexError:
             return np.nan
     else:
         return np.nan
@@ -1026,6 +1144,55 @@ def weight_matrix_incomes():
     iwm_window.close()
 
 
+### PARAMETERS SECTION ------------------------------------------------------------------------------------------------
+n_params = 0
+
+
+def add_parameter():
+    window.extend_layout(window['-PARAMETERS-'], [
+        [sg.Frame(f'Parameter {n_params}', [
+            [sg.Column([
+                [sg.Text('Parameter ID:')],
+                [sg.Input(key=f'-PAR{n_params}_ID-', size=10, enable_events=True)]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Period range:')],
+                    [sg.Multiline(key=f'-PAR{n_params}_PRANGE-', size=(10, 4), enable_events=True)]
+                ]),
+                sg.Column([
+                    [sg.Text('Value:')],
+                    [sg.Multiline(key=f'-PAR{n_params}_PVALUE-', size=(10, 4), enable_events=True)]
+                ]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Probability\nDistribution\nFunction:')],
+                    [sg.Combo(key=f'-PAR{n_params}_MC_TYPE-',
+                              values=['None', 'Uniform', 'Bounded normal-like', 'Triangular',
+                                      'PERT', 'Folded normal', 'Truncated normal',
+                                      'Exponential',
+                                      'Log-logistic',
+                                      'Log-normal', 'Custom Kinked PDF'], enable_events=True,
+                              default_value='None',
+                              size=15)]
+                ]),
+                sg.Column([
+                    [sg.pin(
+                        sg.Text(key=f'-PAR{n_params}_PDFSETTXT-', text='PDF settings:', visible=False)
+                    )],
+                    [sg.pin(
+                        sg.Text(key=f'-PAR{n_params}_PDFSET-', text='', relief="groove", border_width=1, visible=False)
+                    )]
+                ]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Comments/Metadata:')],
+                    [sg.Multiline(key=f'-PAR{n_params}_CM-', size=(40, 4))]
+                ])
+            ]
+        ])]
+    ])
+
+
 ### REFERENCES PRICES SECTION -----------------------------------------------------------------------------------------
 
 # Get the current year to autocomplete combo box.
@@ -1052,7 +1219,7 @@ cpi_table = pd.read_csv(os.getcwd() + '/cpi.csv', index_col='economy')
 exchr_table = pd.read_csv(os.getcwd() + '/exchr.csv', index_col='economy')
 econ_codes = pd.read_csv(os.getcwd() + '/econ_codes.csv', index_col='economy')
 
-print(os.getcwd())
+#print(os.getcwd())
 cpi_table_cols = list(cpi_table.columns)
 cpi_table_cols.reverse()
 cpi_numr = 1
@@ -1143,7 +1310,7 @@ def add_price_group(grp):
              sg.Combo(key=f'-PG{grp}_MC_TYPE-', values=['None', 'Uniform', 'Bounded normal-like', 'Triangular',
                                                         'PERT', 'Folded normal', 'Truncated normal', 'Exponential',
                                                         'Log-logistic',
-                                                        'Log-normal'], enable_events=True, default_value='None',
+                                                        'Log-normal', 'Custom Kinked PDF'], enable_events=True, default_value='None',
                       size=15),
              sg.Text(key=f'-PG{grp}_PDFSETTXT-', text='PDF settings:', visible=False),
              sg.Text(key=f'-PG{grp}_PDFSET-', text='', relief="groove", border_width=1, visible=False)],
@@ -1154,50 +1321,65 @@ def add_price_group(grp):
 # Function to add a new value line to a group.
 def add_price_line(grp, default_country, default_year):
     lin = pr_group_dict[grp] + 1
-
     window.extend_layout(window[f'-PRICE_GROUP_{grp}-'], [
         [sg.Frame(f'Group {grp}, Item {lin}', [
-            [sg.Text('Value ID:'),
-             sg.Input(key=f'-PG{grp}_LIN{lin}_ID-', size=10, enable_events=True),
-             sg.VerticalSeparator(),
-             sg.Text('Units:'),
-             sg.Input(key=f'-PG{grp}_LIN{lin}_UN-', size=10, enable_events=True),
-             sg.VerticalSeparator(),
-             sg.Text('Nominal\nValue:'),
-             sg.Input(key=f'-PG{grp}_LIN{lin}_NV-', size=10, enable_events=True),
-             sg.VerticalSeparator(),
-             sg.Text('Currency:'),
-             sg.Combo(key=f'-PG{grp}_LIN{lin}_CUR-', values=ISO3_list,
-                      default_value=econ_codes._get_value(default_country, 'ISO3'), size=10, enable_events=True),
-             sg.VerticalSeparator(),
-             sg.Text('Year:'),
-             sg.Combo(key=f'-PG{grp}_LIN{lin}_CURYR-', values=list(range(current_year, 1950, -1)),
-                      default_value=default_year, enable_events=True),
-             sg.VerticalSeparator(),
-             sg.Text('Currency\nConversion\nFactor:'),
-             sg.Text(key=f'-PG{grp}_LIN{lin}_CCF-', text='1.0', size=10, relief="groove", border_width=1),
-             sg.Text('Real\nValue:'),
-             sg.Text(key=f'-PG{grp}_LIN{lin}_RV-', text='', size=10, relief="groove", border_width=1),
-             sg.VerticalSeparator(),
-             sg.Text('Adjustment\nFactor:'),
-             sg.Input(key=f'-PG{grp}_LIN{lin}_AF-', default_text=1.0, size=10, enable_events=True),
-             sg.Text('Real\nAdjusted\nValue:'),
-             sg.Text(key=f'-PG{grp}_LIN{lin}_RAV-', text='', size=10, relief="groove", border_width=1),
-             sg.VerticalSeparator(),
-             sg.Text('Probability\nDistribution\nFunction:'),
-             sg.Combo(key=f'-PG{grp}_LIN{lin}_MC_TYPE-', values=['None', 'Uniform', 'Bounded normal-like', 'Triangular',
-                                                                 'PERT', 'Folded normal', 'Truncated normal',
-                                                                 'Exponential',
-                                                                 'Log-logistic',
-                                                                 'Log-normal'], enable_events=True,
-                      default_value='None',
-                      size=15),
-             sg.pin(sg.Text(key=f'-PG{grp}_LIN{lin}_PDFSETTXT-', text='PDF settings:', visible=False)),
-             sg.pin(sg.Text(key=f'-PG{grp}_LIN{lin}_PDFSET-', text='', relief="groove", border_width=1, visible=False)),
-             sg.Text('Comments/\nMetadata:'),
-             sg.Multiline(key=f'-PG{grp}_LIN{lin}_CM-', size=(40, 4))
-             ],
-        ])]])
+            [sg.Column([
+                [sg.Text('Value ID:')],
+                [sg.Input(key=f'-PG{grp}_LIN{lin}_ID-', size=10, enable_events=True)]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Units:')],
+                    [sg.Input(key=f'-PG{grp}_LIN{lin}_UN-', size=10, enable_events=True)]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Nominal Value:')],
+                    [sg.Input(key=f'-PG{grp}_LIN{lin}_NV-', size=10, enable_events=True)]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Currency:')],
+                    [sg.Combo(key=f'-PG{grp}_LIN{lin}_CUR-', values=ISO3_list,
+                              default_value=econ_codes._get_value(default_country, 'ISO3'), size=10,
+                              enable_events=True)]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Year:')],
+                    [sg.Combo(key=f'-PG{grp}_LIN{lin}_CURYR-', values=list(range(current_year, 1950, -1)),
+                              default_value=default_year, enable_events=True)]]),
+                sg.Column([
+                    [sg.Text('Currency Conversion\nFactor:')],
+                    [sg.Text(key=f'-PG{grp}_LIN{lin}_CCF-', text='1.0', size=10, relief="groove", border_width=1)]]),
+                sg.Column([
+                    [sg.Text('Real Value:\n ')],
+                    [sg.Text(key=f'-PG{grp}_LIN{lin}_RV-', text='', size=10, relief="groove", border_width=1)]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Adjustment Factor:\n ')],
+                    [sg.Input(key=f'-PG{grp}_LIN{lin}_AF-', default_text=1.0, size=10, enable_events=True)]]),
+                sg.Column([
+                    [sg.Text('Real Adjusted\nValue:')],
+                    [sg.Text(key=f'-PG{grp}_LIN{lin}_RAV-', text='', size=10, relief="groove", border_width=1)]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Probability Distribution\nFunction:')],
+                    [sg.Combo(key=f'-PG{grp}_LIN{lin}_MC_TYPE-',
+                              values=['None', 'Uniform', 'Bounded normal-like', 'Triangular',
+                                      'PERT', 'Folded normal', 'Truncated normal',
+                                      'Exponential',
+                                      'Log-logistic',
+                                      'Log-normal', 'Custom Kinked PDF'], enable_events=True,
+                              default_value='None',
+                              size=15)]]),
+                sg.Column([
+                    [sg.pin(sg.Text(key=f'-PG{grp}_LIN{lin}_PDFSETTXT-', text='PDF settings:', visible=False))],
+                    [sg.pin(sg.Text(key=f'-PG{grp}_LIN{lin}_PDFSET-', text='', relief="groove", border_width=1,
+                                    visible=False))]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Comments/ Metadata:')],
+                    [sg.Multiline(key=f'-PG{grp}_LIN{lin}_CM-', size=(40, 4))]])
+            ]
+        ])]
+    ])
 
 
 def calc_real_adj_values():
@@ -1206,14 +1388,15 @@ def calc_real_adj_values():
             if values[f'-PG{grp}_LIN{lin}_AF-'] == '':
                 window[f'-PG{grp}_LIN{lin}_AF-'].update('1.0')
                 window.refresh()
-            # Test to see if the numeric imputs are numeric, otherwise remove anything that does not match the pattern of a decimal number.
+            # Test to see if the numeric imputs are numeric, if they are not, assume that it is a parameterised expression.
             if values[f'-PG{grp}_LIN{lin}_NV-'] != '':
                 try:
                     float(values[f'-PG{grp}_LIN{lin}_NV-'])
+                    par_expression = False
                 except ValueError:
-                    window[f'-PG{grp}_LIN{lin}_NV-'].update(
-                        re.findall('\d*[.]\d*', values[f'-PG{grp}_LIN{lin}_NV-'])[0])
+                    par_expression = True
                     window.refresh()
+                # Adjustment factor should always be numeric. If not, clear all non-numeric characters.
                 try:
                     float(values[f'-PG{grp}_LIN{lin}_AF-'])
                 except ValueError:
@@ -1221,20 +1404,28 @@ def calc_real_adj_values():
                         re.findall('\d*[.]\d*', values[f'-PG{grp}_LIN{lin}_AF-'])[0])
                     window.refresh()
 
-                # Do all the calcs, save the un-rounded value in the
                 currency_conversion_factor = exchr_home / exchange_rate(values[f'-PG{grp}_LIN{lin}_CUR-'], current_year,
                                                                         values['-PR_CUR_RANGE-'],
                                                                         values['-PR_CUR_POINT-'])
                 window[f'-PG{grp}_LIN{lin}_CCF-'].update(np.around(currency_conversion_factor, 3))
-
                 inflation_factor = cpi_factor(values[f'-PG{grp}_LIN{lin}_CUR-'], values[f'-PG{grp}_LIN{lin}_CURYR-'])
-                real_value = float(values[f'-PG{grp}_LIN{lin}_NV-']) * currency_conversion_factor * inflation_factor
-                window[f'-PG{grp}_LIN{lin}_RV-'].update(np.around(real_value, 3))
 
-                real_adj_value = real_value * float(values[f'-PG{grp}_LIN{lin}_AF-'])
-                window[f'-PG{grp}_LIN{lin}_RAV-'].update(np.around(real_adj_value, 3))
-                MC_holding_dict[f'-PG{grp}_LIN{lin}_RAV_FULL-'] = real_adj_value
-                window.refresh()
+                if par_expression is False:
+                    # Do all the calcs, save the un-rounded value in the
+                    real_value = float(values[f'-PG{grp}_LIN{lin}_NV-']) * currency_conversion_factor * inflation_factor
+                    window[f'-PG{grp}_LIN{lin}_RV-'].update(np.around(real_value, 3))
+
+                    real_adj_value = real_value * float(values[f'-PG{grp}_LIN{lin}_AF-'])
+                    window[f'-PG{grp}_LIN{lin}_RAV-'].update(np.around(real_adj_value, 3))
+                    MC_holding_dict[f'-PG{grp}_LIN{lin}_RAV_FULL-'] = real_adj_value
+                    window.refresh()
+                else:
+                    real_value = f'{values[f"-PG{grp}_LIN{lin}_NV-"]}*{np.around(currency_conversion_factor * inflation_factor, 3)}'
+                    window[f'-PG{grp}_LIN{lin}_RV-'].update(real_value)
+
+                    real_adj_value = f'{values[f"-PG{grp}_LIN{lin}_NV-"]}*{np.around(currency_conversion_factor * inflation_factor* float(values[f"-PG{grp}_LIN{lin}_AF-"]), 3)}'
+                    window[f'-PG{grp}_LIN{lin}_RAV-'].update(real_adj_value)
+                    MC_holding_dict[f'-PG{grp}_LIN{lin}_RAV_FULL-'] = f'{values[f"-PG{grp}_LIN{lin}_NV-"]}*{currency_conversion_factor * inflation_factor* float(values[f"-PG{grp}_LIN{lin}_AF-"])}'
             else:
                 # If there is no Nominal Value, clear the decks.
                 window[f'-PG{grp}_LIN{lin}_CCF-'].update('')
@@ -1244,12 +1435,41 @@ def calc_real_adj_values():
                 window.refresh()
 
 
+def pdf_window_update(key, mc_dict):
+
+    key_prefix = key.replace('_MC_TYPE-', '')
+    key_dict = {f'{key_prefix}_PDFMIN-': 'Minimum',
+                f'{key_prefix}_PDFMAX-': 'Maximum',
+                f'{key_prefix}_PDFMEA-': 'Mean',
+                f'{key_prefix}_PDFSIG-': 'Sigma',
+                f'{key_prefix}_PDFMOD-': 'Mode',
+                f'{key_prefix}_PDFMED-': 'Median',
+                f'{key_prefix}_PDFSHA-': 'Shape',
+                f'{key_prefix}_PDFSCA-': 'Scale',
+                f'{key_prefix}_PDFRAT-': 'Rate (lambda)',
+                f'{key_prefix}_PDF_WARN-': 'Test Mean',
+                f'{key_prefix}_PDFX-': 'Custom x points',
+                f'{key_prefix}_PDFY-': 'Custom y points',
+                f'{key_prefix}_PDF_REACHT-': 'Rand each t'}
+
+    window[f'{key_prefix}_PDFSETTXT-'].update(visible=True)
+    window[f'{key_prefix}_PDFSET-'].update(visible=True)
+
+    pdf_seting_txt = ''
+    for k in key_dict.keys():
+        if k in mc_dict:
+            pdf_seting_txt += f'\n{key_dict[k]}: {mc_dict[k]}'
+
+    window[f'{key_prefix}_PDFSET-'].update(pdf_seting_txt.strip())
+    window.refresh()
+
 def get_pdf_settings(key, auto_close=False):
     window.Disable()
 
     key_prefix = key.replace('_MC_TYPE-', '')
-    old_values = MC_holding_dict
-    new_values = MC_holding_dict
+    #print(key_prefix)
+    old_values = MC_holding_dict.copy()
+    new_values = MC_holding_dict.copy()
 
     key_list = [f'{key_prefix}_PDFMIN-',
                 f'{key_prefix}_PDFMAX-',
@@ -1260,7 +1480,10 @@ def get_pdf_settings(key, auto_close=False):
                 f'{key_prefix}_PDFSHA-',
                 f'{key_prefix}_PDFSCA-',
                 f'{key_prefix}_PDFRAT-',
-                f'{key_prefix}_PDF_WARN-']
+                f'{key_prefix}_PDF_WARN-',
+                f'{key_prefix}_PDF_REACHT-',
+                f'{key_prefix}_PDFX-',
+                f'{key_prefix}_PDFY-']
 
     key_dict = {f'{key_prefix}_PDFMIN-': 'Minimum',
                 f'{key_prefix}_PDFMAX-': 'Maximum',
@@ -1271,7 +1494,10 @@ def get_pdf_settings(key, auto_close=False):
                 f'{key_prefix}_PDFSHA-': 'Shape',
                 f'{key_prefix}_PDFSCA-': 'Scale',
                 f'{key_prefix}_PDFRAT-': 'Rate (lambda)',
-                f'{key_prefix}_PDF_WARN-': 'Test Mean'}
+                f'{key_prefix}_PDF_WARN-': 'Test Mean',
+                f'{key_prefix}_PDF_REACHT-': 'Rand each t',
+                f'{key_prefix}_PDFX-': 'Custom x points',
+                f'{key_prefix}_PDFY-': 'Custom y points'}
 
     # Generate a new values dictionary and purge all associated PDF settings with the event.
     new_values.update({f'{key_prefix}_MC_TYPE-': values[f'{key_prefix}_MC_TYPE-']})
@@ -1293,7 +1519,7 @@ def get_pdf_settings(key, auto_close=False):
         window[f'{key_prefix}_PDFSET-'].update(visible=True)
 
     # Create the layout pieces.
-    pr_pdf_layout = [[sg.Text(f'The selected Probability Distribution Function is: {old_values[key]}')]]
+    pr_pdf_layout = [[sg.Text(f'The selected Probability Distribution Function is: {values[key]}')]]
 
     pr_pdf_min = [[sg.Text('PDF Minimum:'),
                    sg.Input(key=f'{key_prefix}_PDFMIN-', default_text=old_values.get(f'{key_prefix}_PDFMIN-', '0.9'),
@@ -1338,22 +1564,37 @@ def get_pdf_settings(key, auto_close=False):
                    sg.Input(key=f'{key_prefix}_PDFRAT-', default_text=old_values.get(f'{key_prefix}_PDFRAT-', '1.0'),
                             enable_events=True, size=10)]]
 
-    pr_pdr_warn = [[sg.Text('', key=f'{key_prefix}_PDF_WARN-')]]
+    pr_pdf_xs = [[sg.Text('PDF Custom Xs:'),
+                   sg.Multiline(key=f'{key_prefix}_PDFX-', default_text=old_values.get(f'{key_prefix}_PDFX-', '1.0'),
+                            enable_events=True, size=(10, 4))]]
+
+    pr_pdf_ys = [[sg.Text('PDF Custom Ys:'),
+                  sg.Multiline(key=f'{key_prefix}_PDFY-', default_text=old_values.get(f'{key_prefix}_PDFY-', '1.0'),
+                               enable_events=True, size=(10, 4))]]
+
+    pr_pdf_warn = [[sg.Text('', key=f'{key_prefix}_PDF_WARN-')]]
+
+    pr_pdf_all_per = [[sg.Checkbox('Randomise in each time period?',
+                                   default=old_values.get(f'{key_prefix}_PDF_REACHT-', False),
+                                   key=f'{key_prefix}_PDF_REACHT-')]]
 
     if new_values[key] in ['Uniform', 'Bounded normal-like']:
-        pr_pdf_layout += pr_pdf_min, pr_pdf_max, pr_pdr_warn
+        pr_pdf_layout += pr_pdf_min, pr_pdf_max, pr_pdf_warn, pr_pdf_all_per
 
     if new_values[key] in ['Triangular', 'PERT']:
-        pr_pdf_layout += pr_pdf_min, pr_pdf_mod, pr_pdf_max, pr_pdr_warn
+        pr_pdf_layout += pr_pdf_min, pr_pdf_mod, pr_pdf_max, pr_pdf_warn, pr_pdf_all_per
 
     if new_values[key] in ['Folded normal', 'Truncated normal', 'Log-normal']:
-        pr_pdf_layout += pr_pdf_mea, pr_pdf_sig, pr_pdr_warn
+        pr_pdf_layout += pr_pdf_mea, pr_pdf_sig, pr_pdf_warn, pr_pdf_all_per
 
     if new_values[key] == 'Exponential':
-        pr_pdf_layout += pr_pdf_rat, pr_pdr_warn
+        pr_pdf_layout += pr_pdf_rat, pr_pdf_warn, pr_pdf_all_per
 
     if new_values[key] == 'Log-logistic':
-        pr_pdf_layout += pr_pdf_med, pr_pdf_sha, pr_pdr_warn
+        pr_pdf_layout += pr_pdf_med, pr_pdf_sha, pr_pdf_warn, pr_pdf_all_per
+
+    if new_values[key] == 'Custom Kinked PDF':
+        pr_pdf_layout += pr_pdf_xs, pr_pdf_ys, pr_pdf_warn, pr_pdf_all_per
 
     pr_pdf_layout += [[sg.Button('Submit'), sg.Button('Cancel'), sg.Button('Hidden', visible=False)]]
 
@@ -1362,14 +1603,13 @@ def get_pdf_settings(key, auto_close=False):
 
     pr_pdf_window['Hidden'].click()
 
-    if auto_close is True:
-        pr_pdf_window['Submit'].click()
-
     # Main loop
     while True:
         pr_pdf_event, pr_pdf_values = pr_pdf_window.read()
         # If the window has any of the PDF input fields, update the new_values dictionary with those values.
         pdf_seting_txt = ''
+        if auto_close is True:
+            pr_pdf_window['Submit'].click()
         if pr_pdf_values is not None:
             for k in key_list:
                 if k in pr_pdf_values:
@@ -1442,7 +1682,7 @@ def add_quantity_group(scenario, grp):
                       values=['None', 'Uniform', 'Bounded normal-like', 'Triangular',
                               'PERT', 'Folded normal', 'Truncated normal', 'Exponential',
                               'Log-logistic',
-                              'Log-normal'], enable_events=True, default_value='None',
+                              'Log-normal', 'Custom Kinked PDF'], enable_events=True, default_value='None',
                       size=15),
              sg.pin(sg.Text(key=f'-SCN{scenario}_QG{grp}_PDFSETTXT-', text='PDF settings:', visible=False)),
              sg.pin(sg.Text(key=f'-SCN{scenario}_QG{grp}_PDFSET-', text='', relief="groove", border_width=1,
@@ -1460,6 +1700,19 @@ def add_quantity_group(scenario, grp):
 
 def add_quantity_line(scenario, grp):
     lin = qs_group_dict[grp]
+    try:
+        prices = price_ID_list
+    except:
+        prices = []
+    try:
+        stk = stakeholder_list
+    except:
+        stk = []
+    try:
+        geo = geozones_list
+    except:
+        geo = []
+
     window.extend_layout(window[f'-SCN{scenario}_QG{grp}-'], [
         [sg.Column([
             [sg.Text('Line Item ID:')],
@@ -1468,7 +1721,7 @@ def add_quantity_line(scenario, grp):
             sg.Column([
                 [sg.Text('Value:')],
                 [sg.Combo(key=f'-SCN{scenario}_QG{grp}_LIN{lin}_PRICE-', size=10, enable_events=True,
-                          values=[])]]),
+                          values=prices)]]),
             sg.Column([
                 [sg.Text('Price/Units:')],
                 [sg.Text(key=f'-SCN{scenario}_QG{grp}_LIN{lin}_PRUN-', size=10, relief="groove", border_width=1)]]),
@@ -1476,11 +1729,11 @@ def add_quantity_line(scenario, grp):
             sg.Column([
                 [sg.Text('Stakeholder\nGroup:')],
                 [sg.Combo(key=f'-SCN{scenario}_QG{grp}_LIN{lin}_STKE-', size=10, enable_events=True,
-                          values=[])]]),
+                          values=stk)]]),
             sg.Column([
                 [sg.Text('Geographic\nZone:')],
                 [sg.Combo(key=f'-SCN{scenario}_QG{grp}_LIN{lin}_GEOZN-', size=10, enable_events=True,
-                          values=[])]]),
+                          values=geo)]]),
             sg.VerticalSeparator(),
             sg.Column([
                 [sg.Text('Period range:')],
@@ -1498,7 +1751,7 @@ def add_quantity_line(scenario, grp):
                                   'PERT', 'Folded normal', 'Truncated normal',
                                   'Exponential',
                                   'Log-logistic',
-                                  'Log-normal'], enable_events=True,
+                                  'Log-normal', 'Custom Kinked PDF'], enable_events=True,
                           default_value='None',
                           size=15)]]),
             sg.Column([
@@ -1772,7 +2025,7 @@ def event_model_builder():
                 emb_window[f'-EVENT{event}_DEPENDS-'].update(set_to_index=select_indexes)
                 emb_window[f'-EVENT{event}_DEPENDS_TXT-'].update(value=emb_values[f'-EVENT{event}_DEPENDS-'])
                 emb_window.refresh()
-            print(emb_window['-EVENT_COLS-'].get_size())
+            #print(emb_window['-EVENT_COLS-'].get_size())
 
         if any([re.match(r'-EVENT\d*_DEPENDS-', emb_event)]):
             g = [int(g) for g in re.findall(r'\d+', emb_event)]
@@ -1785,7 +2038,7 @@ def event_model_builder():
             break
         if emb_event == sg.WINDOW_CLOSE_ATTEMPTED_EVENT:
             break
-        print(emb_event, emb_values)
+        # print(emb_event, emb_values)
 
     emb_window.close()
     window.Enable()
@@ -1794,15 +2047,15 @@ def event_model_builder():
 
 ### RESULTS SECTION --------------------------------------------------------------------------------------------------
 sim_initialisation = True
-
+math_expressions = ['ceil', 'fabs', 'floor', 'trunc', 'exp', 'expm', 'log', 'pow', 'sqrt', 'pi', 'e']
 
 def expression_to_array(n_periods, period_ranges, expressions):
     period_ranges_list = period_ranges.split('\n')
     expressions_list = expressions.split('\n')
     n_lines = len(period_ranges_list)
 
-    period_array = np.linspace(0, n_periods - 1, num=n_periods)
-    quantity_array = np.zeros(n_periods)
+    #period_array = np.linspace(0, n_periods - 1, num=n_periods)
+    out_array = np.zeros((n_simulations, n_periods))
 
     end = 0
     for line in range(0, n_lines):
@@ -1813,66 +2066,212 @@ def expression_to_array(n_periods, period_ranges, expressions):
             start, end = map(int, period_ranges_list[line].split(','))
             end += 1
         expression = expressions_list[line]
-        t = period_array[start:end]
-        quantity_array[start:end] = eval(f'{expression}')
-    return quantity_array
+
+        # Search the expression for any parameter strings and replace them with a dictionary address
+        strs_to_replace = re.findall(r'[a-zA-Z^]+', expression)
+        strs_iters = re.finditer(r'[a-zA-Z^]+', expression)
+        replacement_strs = []
+        for m in range(0, len(strs_to_replace)):
+            if strs_to_replace[m] not in math_expressions:
+                replacement_strs.append('parameter_dict["' + f'{strs_to_replace[m]}' + f'"]["expression"][:,{start}:{end}]')
+            else:
+                replacement_strs.append(f'np.{strs_to_replace[m]}')
+        #replacement_strs = ['parameter_dict["' + f'{ps}' + f'"]["expression"][:,{start}:{end}]' for ps in strs_to_replace]
+
+        replacement_list = []
+        rep = 0
+        for match in strs_iters:
+            replacement_list.append((match, replacement_strs[rep]))
+            rep += 1
+        for r in reversed(replacement_list):
+            expression = expression[:r[0].start()] + r[1] + expression[r[0].end():]
+        #print(expression)
+        #t = period_array[start:end]
+        out_array[:, start:end] = eval(f'{expression}')
+        #print(out_array)
+
+    return out_array
+
+
+def set_custom_dfs(x_points, y_points):
+    global prob_df
+    global y_points_norm
+    global zone_areas
+    global mean_df
+    global cuml_vect
+
+    area_df = 0
+    for zone in range(0, len(x_points)-1):
+        miny = min(y_points[zone], y_points[zone+1])
+        maxy = max(y_points[zone], y_points[zone+1])
+        widthx = x_points[zone+1]-x_points[zone]
+        area_df += widthx*miny + 0.5*widthx*(maxy-miny)
+
+    y_points_norm = y_points / area_df
+    prob_df = interpolate.interp1d(x=x_points, y=y_points_norm, bounds_error=False, fill_value=0)
+
+    zone_areas = np.zeros(len(x_points)-1)
+    zone_means = np.zeros(len(x_points)-1)
+
+    for zone in range(0, len(x_points) - 1):
+        miny = min(y_points_norm[zone], y_points_norm[zone + 1])
+        maxy = max(y_points_norm[zone], y_points_norm[zone + 1])
+        widthx = x_points[zone + 1] - x_points[zone]
+        zone_areas[zone] = widthx * miny + 0.5 * widthx * (maxy - miny)
+        zone_means[zone] = (x_points[zone]*prob_df(x_points[zone])+x_points[zone+1]*prob_df(x_points[zone+1]))/(prob_df(x_points[zone])+prob_df(x_points[zone+1]))
+
+    mean_df = np.sum(zone_areas * zone_means)
+
+    def cuml_df(x):
+        for zone in range(0, len(x_points) - 1):
+            if zone == 0:
+                prev_area = 0
+            else:
+                prev_area = np.sum(zone_areas[:zone])
+            if x_points[zone] < x < x_points[zone + 1]:
+                miny = min(y_points_norm[zone], prob_df(x))
+                maxy = max(y_points_norm[zone], prob_df(x))
+                x_start = x_points[zone]
+                return prev_area + (x - x_start) * miny + 0.5 * (x - x_start) * (maxy - miny)
+
+    cuml_vect = np.vectorize(cuml_df)
+
+
+class custom_kinks_gen(rv_continuous):
+
+    "Custom Kinks distribution"
+
+    def _pdf(self, x):
+        return prob_df(x)
+
+    def _cdf(self, x):
+        return cuml_vect(x)
 
 
 def monte_carlo_expression(prefix, PDF_func, n_simulations):
+    # Set the size based on whether the MC settings requires RNG in all time periods.
+    if f'{prefix}_PDF_REACHT-' in MC_holding_dict:
+        if MC_holding_dict[f'{prefix}_PDF_REACHT-'] is True:
+            dims = (n_simulations, n_simulation_periods)
+        else:
+            dims = (n_simulations, 1)
+    else:
+        dims = (n_simulations, 1)
+
+    MC_expr_dict = {}
+
+    MC_expr_dict['PDF_min'] = MC_holding_dict.get(f'{prefix}_PDFMIN-', '0')
+    MC_expr_dict['PDF_max'] = MC_holding_dict.get(f'{prefix}_PDFMAX-', '0')
+    MC_expr_dict['PDF_mode'] = MC_holding_dict.get(f'{prefix}_PDFMOD-', '0')
+    MC_expr_dict['PDF_mean'] = MC_holding_dict.get(f'{prefix}_PDFMEA-', '0')
+    MC_expr_dict['PDF_stdev'] = MC_holding_dict.get(f'{prefix}_PDFSIG-', '0')
+    MC_expr_dict['PDF_lambda'] = MC_holding_dict.get(f'{prefix}_PDFRAT-', '0')
+    MC_expr_dict['PDF_shape'] = MC_holding_dict.get(f'{prefix}_PDFSHA-', '0')
+    MC_expr_dict['PDF_median'] = MC_holding_dict.get(f'{prefix}_PDFMED-', '0')
+    MC_expr_dict['PDF_xs'] = list(MC_holding_dict.get(f'{prefix}_PDFX-', '0').split('\n'))
+    MC_expr_dict['PDF_ys'] = list(MC_holding_dict.get(f'{prefix}_PDFY-', '0').split('\n'))
+    #MC_expr_dict['PDF_xs'] = np.array(list(map(float, MC_holding_dict.get(f'{prefix}_PDFX-', '0').split('\n'))))
+    #MC_expr_dict['PDF_ys'] = np.array(list(map(float, MC_holding_dict.get(f'{prefix}_PDFY-', '0').split('\n'))))
+
+    for v in ['PDF_min', 'PDF_max', 'PDF_mode', 'PDF_mean', 'PDF_stdev', 'PDF_lambda',
+              'PDF_shape', 'PDF_median']:
+        try:
+            MC_expr_dict[v] = float(MC_expr_dict[v])
+        except ValueError:
+            MC_expr_dict[v] = parameter_dict[MC_expr_dict[v]]['expression']
+
+    par_kink_flag = False
+    for v in ['PDF_xs', 'PDF_ys']:
+        try:
+            MC_expr_dict[v] = np.array(list(map(float, MC_expr_dict[v])))
+        except ValueError:
+            par_kink_flag = True
+            PDF_points_arr = np.zeros((len(MC_expr_dict[v]), n_simulation_periods))
+            for p in MC_expr_dict[v]:
+                try:
+                    PDF_points_arr[p, :] = float(p)
+                except ValueError:
+                    PDF_points_arr[p, :] = parameter_dict[p]['expression']
+            MC_expr_dict[v] = PDF_points_arr
+
+
+
     if PDF_func == 'None':
-        return np.ones(n_simulations)
+        return np.ones(dims)
     if PDF_func == 'Uniform':
-        return uniform.rvs(loc=float(MC_holding_dict[f'{prefix}_PDFMIN-']),
-                           scale=float(MC_holding_dict[f'{prefix}_PDFMAX-']) - float(
-                               MC_holding_dict[f'{prefix}_PDFMIN-']),
-                           size=n_simulations,
+        return uniform.rvs(loc=MC_expr_dict['PDF_min'],
+                           scale=MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min'],
+                           size=dims,
                            random_state=random_generator)
     if PDF_func == 'Bounded normal-like':
-        return np.mean(uniform.rvs(loc=float(MC_holding_dict[f'{prefix}_PDFMIN-']),
-                                   scale=float(MC_holding_dict[f'{prefix}_PDFMAX-']) - float(
-                                       MC_holding_dict[f'{prefix}_PDFMIN-']),
-                                   size=3,
-                                   random_state=random_generator))
+        bnl_a = uniform.rvs(loc=MC_expr_dict['PDF_min'],
+                           scale=MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min'],
+                           size=dims,
+                           random_state=random_generator)
+        bnl_b = uniform.rvs(loc=MC_expr_dict['PDF_min'],
+                           scale=MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min'],
+                           size=dims,
+                           random_state=random_generator)
+        bnl_c = uniform.rvs(loc=MC_expr_dict['PDF_min'],
+                           scale=MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min'],
+                           size=dims,
+                           random_state=random_generator)
+        return (bnl_a + bnl_b + bnl_c) / 3
     if PDF_func == 'Triangular':
-        return triang.rvs(c=float(MC_holding_dict[f'{prefix}_PDFMOD-']),
-                          loc=float(MC_holding_dict[f'{prefix}_PDFMIN-']),
-                          scale=float(MC_holding_dict[f'{prefix}_PDFMAX-']) - float(
-                              MC_holding_dict[f'{prefix}_PDFMIN-']),
-                          size=n_simulations,
+        return triang.rvs(c=MC_expr_dict['PDF_mode']/(MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min']),
+                          loc=MC_expr_dict['PDF_min'],
+                          scale=MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min'],
+                          size=dims,
                           random_state=random_generator)
     if PDF_func == 'PERT':
-        r = float(MC_holding_dict[f'{prefix}_PDFMAX-']) - float(MC_holding_dict[f'{prefix}_PDFMIN-'])
-        a = 1 + 4 * (float(MC_holding_dict[f'{prefix}_PDFMOD-']) - float(MC_holding_dict[f'{prefix}_PDFMIN-'])) / r
-        b = 1 + 4 * (float(MC_holding_dict[f'{prefix}_PDFMAX-']) - float(MC_holding_dict[f'{prefix}_PDFMOD-'])) / r
-        return float(MC_holding_dict[f'{prefix}_PDFMIN-']) + beta.rvs(a=a, b=b, scale=r, size=n_simulations,
+        r = MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min']
+        a = 1 + 4 * (MC_expr_dict['PDF_mode'] - MC_expr_dict['PDF_min']) / r
+        b = 1 + 4 * (MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_mode']) / r
+        return beta.rvs(a=a, b=b, scale=r, loc=MC_expr_dict['PDF_min'], size=dims,
                                                                       random_state=random_generator)
     if PDF_func == 'Folded normal':
         return foldnorm.rvs(
-            c=(float(MC_holding_dict[f'{prefix}_PDFMEA-'])) / (float(MC_holding_dict[f'{prefix}_PDFSIG-'])),
+            c=MC_expr_dict['PDF_mean'] / MC_expr_dict['PDF_stdev'],
             loc=0,
-            scale=float(MC_holding_dict[f'{prefix}_PDFSIG-']),
-            size=n_simulations,
+            scale=MC_expr_dict['PDF_stdev'],
+            size=dims,
             random_state=random_generator)
     if PDF_func == 'Truncated normal':
         return truncnorm.rvs(a=0, b=np.inf,
-                             loc=float(MC_holding_dict[f'{prefix}_PDFMEA-']),
-                             scale=float(MC_holding_dict[f'{prefix}_PDFSIG-']),
-                             size=n_simulations,
+                             loc=MC_expr_dict['PDF_mean'],
+                             scale=MC_expr_dict['PDF_stdev'],
+                             size=dims,
                              random_state=random_generator)
     if PDF_func == 'Exponential':
-        return expon.rvs(scale=(1 / float(MC_holding_dict[f'{prefix}_PDFRAT-'])),
-                         size=n_simulations,
-                         random_state=random_generator),
+        return expon.rvs(scale=(1 / MC_expr_dict['PDF_lambda']),
+                         size=dims,
+                         random_state=random_generator)
     if PDF_func == 'Log-logistic':
-        return fisk.rvs(c=float(MC_holding_dict[f'{prefix}_PDFSHA-']),
-                        scale=float(MC_holding_dict[f'{prefix}_PDFMED-']),
-                        size=n_simulations,
+        return fisk.rvs(c=MC_expr_dict['PDF_shape'],
+                        scale=MC_expr_dict['PDF_median'],
+                        size=dims,
                         random_state=random_generator)
     if PDF_func == 'Log-normal':
-        return lognorm.rvs(s=float(MC_holding_dict[f'{prefix}_PDFSIG-']),
-                           scale=np.exp(float(MC_holding_dict[f'{prefix}_PDFMEA-'])),
-                           size=n_simulations,
+        return lognorm.rvs(s=MC_expr_dict['PDF_stdev'],
+                           scale=np.exp(MC_expr_dict['PDF_mean']),
+                           size=dims,
                            random_state=random_generator)
+    if PDF_func == 'Custom Kinked PDF':
+        if par_kink_flag is False:
+            xs = MC_expr_dict['PDF_xs']
+            ys = MC_expr_dict['PDF_ys']
+            set_custom_dfs(xs, ys)
+            cust_kink = custom_kinks_gen(name='custom_kinks', a=np.min(xs), b=np.max(xs))
+            return cust_kink.rvs(size=dims, random_state=random_generator)
+        else:
+            out_arr = np.zeros(dims)
+            for t in range(0, n_simulation_periods):
+                xs = MC_expr_dict['PDF_xs'][:, t]
+                ys = MC_expr_dict['PDF_ys'][:, t]
+                set_custom_dfs(xs, ys)
+                cust_kink = custom_kinks_gen(name='custom_kinks', a=np.min(xs), b=np.max(xs))
+                out_arr[:, t] = cust_kink.rvs(size=(n_simulations, 1), random_state=random_generator)[:, 0]
+            return out_arr
     else:
         return None
 
@@ -1907,8 +2306,13 @@ def outcome_arrays(weights, noreps, maxreps, monte_carlo_sims, depends_mask):
     outcome_map = monte_carlo_sims * depends_mask
     outcome_map_dict = {}
 
-    np.apply_along_axis(outcome_array_line, 1, arr=outcome_map,
+    for s in range(0, n_simulations):
+        sim_weights = weights[:, s, :]
+        outcome_array_line(outcome_map[s, :], weights=sim_weights, noreps=noreps, maxreps=maxreps)
+
+    """np.apply_along_axis(outcome_array_line, 1, arr=outcome_map,
                         weights=weights, noreps=noreps, maxreps=maxreps)
+    Needed to change the code to accommodate the possibility of different weights in each simulation."""
 
     for outs in range(1, len(weights) + 1):
         outcome_map_dict[outs] = outcome_map == outs
@@ -1919,13 +2323,9 @@ def outcome_arrays(weights, noreps, maxreps, monte_carlo_sims, depends_mask):
 def results_display_table(run, measure, weights, net_scn_z, distribution_segments=['All'], bcr_denom='All'):
     fallback_bcr = False
 
-    if measure == 'Average':
-        select_col = 'discounted_total_value_mean'
-    else:
-        select_col = f'discounted_total_value_{measure}'
-
     display_table = run_results[run][['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
-                                      'geography', 'weight', select_col]]
+                                      'geography', 'weight', 'discounted_total_value']].copy()
+
     # print(display_table.to_string())
     if distribution_segments != ['All']:
         display_table['stk_geo'] = list(zip(display_table['stakeholder'], display_table['geography']))
@@ -1934,50 +2334,80 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     # Add a zero benefits and costs line to the display table for each scenario to assist with handling null cases
     for scn in range(0, n_scenarios + 1):
         display_table_null = pd.DataFrame(
-            [[scn, '', '', 'Costs', '', '', '', 1.0, 0],
-             [scn, '', '', 'Benefits', '', '', '', 1.0, 0]],
+            [[scn, '', '', 'Costs', '', '', '', 1.0, np.zeros(n_simulations)],
+             [scn, '', '', 'Benefits', '', '', '', 1.0, np.zeros(n_simulations)]],
             columns=['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
-                     'geography', 'weight', select_col])
+                     'geography', 'weight', 'discounted_total_value'])
         display_table = pd.concat([display_table, display_table_null])
 
     if net_scn_z == 'Yes':
-        scn_z_frame = display_table.loc[display_table['scenario'] == 0].rename(columns={select_col: f'{select_col}_0'})
+        scn_z_frame = display_table.loc[display_table['scenario'] == 0].rename(
+            columns={'discounted_total_value': 'discounted_total_value_0'})
 
-        display_table = pd.merge(display_table, scn_z_frame[['group_id', 'line_id', f'{select_col}_0']],
+        display_table = pd.merge(display_table, scn_z_frame[['group_id', 'line_id', 'discounted_total_value_0']],
                                  how='left', on=['group_id', 'line_id'])
 
-        display_table[select_col] = display_table[select_col] - display_table[f'{select_col}_0']
+        display_table['discounted_total_value'] = display_table['discounted_total_value'] - display_table[
+            'discounted_total_value_0']
 
     if weights == 'Weighted':
-        display_table[select_col] = display_table[select_col] * display_table['weight']
+        display_table['discounted_total_value'] = display_table['discounted_total_value'] * display_table['weight']
 
     display_table = display_table[['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
-                                   'geography', select_col]]
+                                   'geography', 'discounted_total_value']]
+
+    if measure == 'Average':
+        display_table['calc_total'] = display_table.discounted_total_value.apply(lambda x: np.average(x))
+    else:
+        # If the user selects a percentile to display, calculate and order npv for each scenario
+        # Calculate the Raw Net Benefits for each scenario.
+        raw_total_records = {}
+        for scn in range(0, n_scenarios + 1):
+            raw_benefits = display_table.loc[
+                ((display_table['scenario'] == scn) & (display_table['type'] == 'Benefits'))]
+            raw_costs = display_table.loc[((display_table['scenario'] == scn) & (display_table['type'] == 'Costs'))]
+            raw_npv = raw_benefits.discounted_total_value.sum() - raw_costs.discounted_total_value.sum()
+            raw_npv_argsort = np.argsort(raw_npv)
+            raw_total_records[f'scn_{scn}'] = raw_npv_argsort
+        display_table['disc_tot_val_argsort'] = display_table.apply(
+            lambda row: np.take_along_axis(row['discounted_total_value'],
+                                           raw_total_records[f'scn_{row["scenario"]}'],
+                                           axis=0), axis=1)
+
+        # Find the representative median in a 1% window around the percentile nominated by the user.
+        measure_dict = {'P5': 5, 'P10': 10, 'P20': 20, 'P30': 30, 'P40': 40, 'P50': 50, 'P60': 60, 'P70': 70, 'P80': 80,
+                        'P90': 90, 'P95': 95}
+        percentile = measure_dict[measure]
+        lower_index = int(np.around((n_simulations / 100) * (percentile - 1), 0))
+        upper_index = int(np.around((n_simulations / 100) * (percentile + 1), 0))
+        display_table['calc_total'] = display_table.disc_tot_val_argsort.apply(
+            lambda x: np.median(x[lower_index:upper_index]))
 
     # Calculate Total Costs
-    display_table_costs = display_table.loc[(((display_table['type'] == 'Costs') & (display_table[select_col] >= 0)) |
-                                             ((display_table['type'] == 'Benefits') & (display_table[select_col] < 0)))]
+    display_table_costs = display_table.loc[(((display_table['type'] == 'Costs') & (display_table['calc_total'] >= 0)) |
+                                             ((display_table['type'] == 'Benefits') & (
+                                                     display_table['calc_total'] < 0)))].copy()
     # print(display_table_costs.to_string())
-    display_table_costs[select_col] = display_table_costs[select_col].abs()
-    display_table_costs = pd.pivot_table(display_table_costs, values=select_col, columns=['scenario'],
+    display_table_costs['calc_total'] = display_table_costs['calc_total'].abs()
+    display_table_costs = pd.pivot_table(display_table_costs, values='calc_total', columns=['scenario'],
                                          index=['group_id', 'line_id'], aggfunc=np.sum)
     # print(display_table_costs.to_string())
 
     # Calculate Total Benefits
     display_table_benefits = display_table.loc[
-        (((display_table['type'] == 'Benefits') & (display_table[select_col] >= 0)) |
-         ((display_table['type'] == 'Costs') & (display_table[select_col] < 0)))]
-    display_table_benefits[select_col] = display_table_benefits[select_col].abs()
+        (((display_table['type'] == 'Benefits') & (display_table['calc_total'] >= 0)) |
+         ((display_table['type'] == 'Costs') & (display_table['calc_total'] < 0)))].copy()
+    display_table_benefits['calc_total'] = display_table_benefits['calc_total'].abs()
 
-    display_table_benefits = pd.pivot_table(display_table_benefits, values=select_col, columns=['scenario'],
+    display_table_benefits = pd.pivot_table(display_table_benefits, values='calc_total', columns=['scenario'],
                                             index=['group_id', 'line_id'], aggfunc=np.sum)
 
     # Calculate Net Benefits
-    display_table_npv = pd.pivot_table(display_table, values=select_col, columns=['scenario'],
+    display_table_npv = pd.pivot_table(display_table, values='calc_total', columns=['scenario'],
                                        index=['type'], aggfunc=np.sum)
     display_table_npv.loc['Costs'] = display_table_npv.loc['Costs'] * -1
 
-    display_table = pd.pivot_table(display_table, values=select_col, columns=['scenario'],
+    display_table = pd.pivot_table(display_table, values='calc_total', columns=['scenario'],
                                    index=['type', 'group_id', 'line_id'], aggfunc=np.sum)
     display_table.sort_index(level=0, ascending=False, inplace=True)
 
@@ -1988,6 +2418,7 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     if bcr_denom == 'All':
         display_table.loc['BCR', :] = display_table.loc[['TOTAL BENEFITS']].values / display_table.loc[
             ['TOTAL COSTS']].values
+        # Will give RuntimeWarning: invalid value encountered in divide when calculating Net of Scn0 due to div by 0
     else:
         try:
             display_table.loc['BCR*', :] = (display_table.loc[['NPV']].values + display_table.loc[
@@ -2033,21 +2464,21 @@ def plot_histo_cdf(run_number, scenario, weights, net_scn_z, distribution_segmen
     global result_graphs
 
     plot_data = run_results[run_number][
-        ['scenario', 'group_id', 'line_id', 'type', 'stakeholder', 'geography', 'weight', 'discounted_total_value']]
+        ['scenario', 'group_id', 'line_id', 'type', 'stakeholder', 'geography', 'weight', 'discounted_total_value']].copy()
 
     if distribution_segments != ['All']:
         plot_data['stk_geo'] = list(zip(plot_data['stakeholder'], plot_data['geography']))
         plot_data = plot_data.loc[plot_data['stk_geo'].isin(distribution_segments)]
 
-        # Add a zero benefits and costs line to the display table for each scenario to assist with handling null cases
-        for scn in range(0, n_scenarios + 1):
-            plot_data_null = pd.DataFrame(
-                [[scn, '', '', 'Costs', '', '', '', 0],
-                 [scn, '', '', 'Benefits', '', '', '', 0]],
-                columns=['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
-                         'geography', 'discounted_total_value'])
-            plot_data = pd.concat([plot_data, plot_data_null])
-
+    # Add a zero benefits and costs line to the display table for each scenario to assist with handling null cases
+    for scn in range(0, n_scenarios + 1):
+        plot_data_null = pd.DataFrame(
+            [[scn, '', '', 'Costs', '', '', 1, np.zeros(n_simulations)],
+             [scn, '', '', 'Benefits', '', '', 1, np.zeros(n_simulations)]],
+            columns=['scenario', 'group_id', 'line_id', 'type', 'stakeholder',
+                     'geography', 'weight', 'discounted_total_value'])
+        plot_data = pd.concat([plot_data, plot_data_null])
+        #print(plot_data.to_string())
     if net_scn_z == 'Yes':
         scn_z_frame = plot_data.loc[plot_data['scenario'] == 0].rename(
             columns={'discounted_total_value': 'discounted_total_value_0'})
@@ -2059,7 +2490,7 @@ def plot_histo_cdf(run_number, scenario, weights, net_scn_z, distribution_segmen
 
     if weights == 'Weighted':
         plot_data['discounted_total_value'] = plot_data['discounted_total_value'] * plot_data['weight']
-
+        print(plot_data.to_string())
     plot_data = plot_data[['scenario', 'group_id', 'line_id', 'type', 'stakeholder',
                            'geography', 'discounted_total_value']]
 
@@ -2114,7 +2545,7 @@ def result_popup(run_number):
     cost_groups = run_results[run_number].loc[run_results[run_number]['type'] == 'Costs']['group_id'].to_list()
     cost_groups = ['All'] + [*set(cost_groups)]
 
-    da_radio_layout = []
+    da_radio_layout = sg.Text('')
     if values['-DA_STKGRP-'] != '' and values['-DA_GEOGRP-'] != '':
         ROWS = len(DA_table)
         COLS = len(DA_table[1])
@@ -2321,7 +2752,7 @@ dr_layout = [
                                           'PERT', 'Folded normal', 'Truncated normal',
                                           'Exponential',
                                           'Log-logistic',
-                                          'Log-normal'], enable_events=True,
+                                          'Log-normal', 'Custom Kinked PDF'], enable_events=True,
               default_value='None',
               size=15),
      sg.pin(sg.Text(key=f'-DR_PDFSETTXT-', text='PDF settings:', visible=False)),
@@ -2347,6 +2778,15 @@ da_layout = [
     [sg.Button('Input Income Weights', key='-DA_INPUT WEIGHTS_INCOME-', disabled=True)]
 ]
 
+### PARAMETER VALUES SECTION ------------------------------------------------------------------------------------------
+par_layout = [
+    [sg.Button('Add Parameter')],
+    [sg.Column(key='-PAR_COLS-', size=(1500, 280), scrollable=True, vertical_scroll_only=True,
+               layout=[
+                   [sg.Frame(title='Parameters', key='-PARAMETERS-', layout=[])]
+               ])]
+]
+
 ### REFERENCE PRICE SECTION -------------------------------------------------------------------------------------------
 pr_layout = [
     [sg.Frame('Analysis Settings', [
@@ -2365,7 +2805,7 @@ pr_layout = [
                  text=f'The benchmark exchange rate is {econ_codes._get_value("Australia", "ISO3")}{np.around(exchr_home, 3)}/USD.')]
     ])],
     [sg.Button('Add New Group', key='-ADD_PRICE_GROUP-')],
-    [sg.Column(key='-PG_COLS-', size=(2270, 250), scrollable=True, vertical_scroll_only=True,
+    [sg.Column(key='-PG_COLS-', size=(1500, 280), scrollable=True, vertical_scroll_only=True,
                layout=[[sg.Frame(title='', key='-PRICE_GROUPS-', layout=[])]]
                )],
     [sg.Button('Trigger Refresh', visible=False)]
@@ -2401,8 +2841,9 @@ res_layout = [
 
 layout = [
     [sg.TabGroup([[
-        sg.Tab(title='Discount Rate Settings', layout=dr_layout),
-        sg.Tab(title='Distribution Analysis Settings', layout=da_layout),
+        sg.Tab(title='Discount Rate', layout=dr_layout),
+        sg.Tab(title='Distribution Analysis', layout=da_layout),
+        sg.Tab(title='Parameters', layout=par_layout),
         sg.Tab(title='Reference Prices', layout=pr_layout),
         sg.Tab(title='Quantity Scenarios', layout=qnt_layout),
         sg.Tab(title='Results', layout=res_layout)
@@ -2439,10 +2880,16 @@ while True:
     if event == 'From .json':
         user_settings_file = sg.popup_get_file('Select settings file to open')
         load_settings_json(user_settings_file)  # return a dictionary called user_setting
+        print(MC_update_display)
+        print(MC_holding_dict)
+        for m in MC_update_display:
+            pdf_window_update(m, MC_holding_dict)
 
     if event == 'From .xlsx':
         user_settings_file = sg.popup_get_file('Select settings file to open')
         load_settings_xlsx(user_settings_file)
+        for m in MC_update_display:
+            pdf_window_update(m, MC_holding_dict)
 
     if event == 'Save Settings':
         file_to_save = open(sg.popup_get_file(message='Filepath to save as:',
@@ -2534,6 +2981,21 @@ while True:
         window['-DA_TABLE_DISPLAY-'].update(
             pd.DataFrame(DA_table[1:len(DA_table)], columns=DA_table[0]).to_string(index=False))
 
+    ### PARAMETER EVENTS ----------------------------------------------------------------------------------------------
+    if event == 'Add Parameter':
+        n_params += 1
+        add_parameter()
+        if window['-PAR_COLS-'].get_size()[1] < 700:
+            resize = 280 + window['-PAR_COLS-'].get_size()[1]
+            set_size(window['-PAR_COLS-'], (None, resize))
+        window.refresh()
+        window['-PAR_COLS-'].contents_changed()
+
+    # If PDF settings are changed, open dialogue to receive PDF inputs and update window.
+    if re.match(r'-PAR\d*_MC_TYPE-', event):
+        MC_holding_dict = get_pdf_settings(event)
+        window.refresh()
+
     ### REFERENCE PRICES EVENTS ---------------------------------------------------------------------------------------
     if event == '-ADD_PRICE_GROUP-':
         pr_group_dict[n_pr_groups + 1] = 0
@@ -2543,7 +3005,7 @@ while True:
         pr_group_dict[n_pr_groups] += 1
         # Limit the height of the column to 700 pixels
         if window['-PG_COLS-'].get_size()[1] < 700:
-            resize = 242 + window['-PG_COLS-'].get_size()[1]
+            resize = 280 + window['-PG_COLS-'].get_size()[1]
             set_size(window['-PG_COLS-'], (None, resize))
         window.refresh()
         window['-PG_COLS-'].contents_changed()
@@ -2555,7 +3017,7 @@ while True:
         add_price_line(g[0], values['-PR_COUNTRY-'], values['-PR_YEAR-'])
         pr_group_dict[g[0]] += 1
         if window['-PG_COLS-'].get_size()[1] < 700:
-            resize = 100 + window['-PG_COLS-'].get_size()[1]
+            resize = 145 + window['-PG_COLS-'].get_size()[1]
             set_size(window['-PG_COLS-'], (None, resize))
         window.refresh()
         window['-PG_COLS-'].contents_changed()
@@ -2579,8 +3041,8 @@ while True:
             re.match(r'-PG\d*_LIN\d*_CURYR-', event), re.match(r'-PG\d*_LIN\d*_AF-', event), event == '-RES_RUN-']):
         calc_real_adj_values()
 
-    # If line item names are changed, collate all names and update the Price per Unit Combo box in the Quantity Scenarios tab.
-    if any([re.match(r'-PG\d*_LIN\d*_ID-', event), event == 'Trigger Refresh']):
+    # If line item names are changed, or quantity lines added collate all names and update the Price per Unit Combo box in the Quantity Scenarios tab.
+    if any([re.match(r'-PG\d*_LIN\d*_ID-', event), re.match(r'-ADD_TO_QG_\d*-', event), event == 'Trigger Refresh']):
         price_ID_list = []
         for grp in range(1, n_pr_groups + 1):
             for lin in range(1, pr_group_dict[grp] + 1):
@@ -2596,7 +3058,7 @@ while True:
     # If PDF settings are selected. Open new window to recieve settings and create a new values dictionary with added entires.
     if any([re.match(r'-PG\d*_MC_TYPE-', event), re.match('-PG\d*_LIN\d*_MC_TYPE-', event)]):
         MC_holding_dict = get_pdf_settings(event)
-        # print('this is the new holding dictionary', MC_holding_dict)
+        #print('this is the new holding dictionary', MC_holding_dict)
         window.refresh()
 
     ### QUANTITY SCENARIO EVENTS --------------------------------------------------------------------------------------
@@ -2671,8 +3133,7 @@ while True:
                         value == values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRICE-'] and key[0:3] == '-PG'))]
                     try:
                         price_unit_text = str(
-                            np.around(MC_holding_dict[f'-PG{price_group_line[0]}_LIN{price_group_line[1]}_RAV_FULL-'],
-                                      3)) + '/' + values[f'-PG{price_group_line[0]}_LIN{price_group_line[1]}_UN-']
+                            MC_holding_dict[f'-PG{price_group_line[0]}_LIN{price_group_line[1]}_RAV_FULL-']) + '/' + values[f'-PG{price_group_line[0]}_LIN{price_group_line[1]}_UN-']
                         window[f'-SCN{scn}_QG{grp}_LIN{lin}_PRUN-'].update(price_unit_text)
                     except KeyError:
                         window[f'-SCN{scn}_QG{grp}_LIN{lin}_PRUN-'].update('NO VALUES')
@@ -2700,7 +3161,7 @@ while True:
     # If PDF settings are selected. Open new window to recieve settings and create a new values dictionary with added entires.
     if any([re.match(r'-SCN\d*_QG\d*_MC_TYPE-', event), re.match('-SCN\d*_QG\d*_LIN\d*_MC_TYPE-', event)]):
         MC_holding_dict = get_pdf_settings(event)
-        print('this is the new holding dictionary', MC_holding_dict)
+        #print('this is the new holding dictionary', MC_holding_dict)
         window.refresh()
 
     # RESULTS EVENTS ---------------------------------------------------------------------------------------------------
@@ -2712,7 +3173,49 @@ while True:
         split_pranges = [list(map(int, re.split(',|\n', values[key]))) for key in values if 'PRANGE-' in str(key)]
         split_pranges_flat = [period for sublist in split_pranges for period in sublist]
         # Get the maximum number of simulation periods from the Quantity Scenarios Tab
-        n_simulation_periods = np.amax(np.array(split_pranges_flat))
+        n_simulation_periods = np.amax(np.array(split_pranges_flat)) + 1
+        # Create a map of ones of the size of the total arrays to facilitate broadcasting to the right shape.
+        one_map = np.ones((n_simulations, n_simulation_periods))
+
+        # Parameters Dictionary
+        parameter_dict = {}
+        parameter_dict['t'] = {}
+        parameter_dict['t']['expression'] = np.linspace(0, n_simulation_periods - 1, num=n_simulation_periods)*one_map
+        if n_params > 0:
+            parameter_checklist = []
+            for par in range(1, n_params + 1):
+                parameter_checklist.append(values[f'-PAR{par}_ID-'])
+            for par in range(1, n_params+1):
+                parameter_dict[f'{values[f"-PAR{par}_ID-"]}'] = {}
+                parameter_dict[f'{values[f"-PAR{par}_ID-"]}']['index'] = par
+                parameter_dict[f'{values[f"-PAR{par}_ID-"]}']['expression'] = 'EMPTY'
+
+            while len(parameter_checklist) > 0:
+                for par in parameter_checklist:
+                    # Check to see if the parameter has any dependencies that have not been calculated yet.
+                    if parameter_dict[f'{par}']['expression'] == 'EMPTY':
+                        par_skip_flag = False
+                        p_n = parameter_dict[par]['index']
+                        par_deps_list = re.findall(r'[a-zA-Z^]+', values[f'-PAR{p_n}_PVALUE-'])
+                        par_deps_list = [m for m in par_deps_list if m not in math_expressions]
+                        for par_dep in par_deps_list:
+                            if parameter_dict[f'{par_dep}']['expression'] == 'EMPTY':
+                                par_skip_flag = True
+                                break
+                        if par_skip_flag is not True:
+                            par_num = parameter_dict[f'{par}']['index']
+                            parameter_dict[f'{par}']['expression'] = expression_to_array(
+                                n_simulation_periods,
+                                values[f'-PAR{par_num}_PRANGE-'],
+                                values[f'-PAR{par_num}_PVALUE-'])
+                            # Broadcast Monte Carlo random noise array over the expression array.
+                            par_monte_carlo_sims = monte_carlo_expression(
+                                f'-PAR{par_num}',
+                                values[f'-PAR{par_num}_MC_TYPE-'],
+                                n_simulations)
+                            parameter_dict[f'{par}']['expression'] = parameter_dict[f'{par}']['expression']*par_monte_carlo_sims
+                            parameter_checklist.remove(par)
+                            #np.savetxt(f"D:/Local Account/Documents/MonteCarlo CBA/Dev Diaries/ESA_CBA_FORUM_2023.{par}.csv", parameter_dict[f'{par}']['expression'], delimiter=',')
 
         # Discount Rate Array
         if values['-DR_TYPE-'] == 'Constant':
@@ -2734,33 +3237,35 @@ while True:
             sig = float(values['-DR_SIG-']) / 100
             dr_base_array = np.array([(mu / (1 + ((t - 1) * sig ** 2) / mu)) for t in range(0, n_simulation_periods)])
         dr_base_array[0][0] = 0
-        dr_monte_carlo_factors = np.reshape(monte_carlo_expression('-DR', values['-DR_MC_TYPE-'], n_simulations),
-                                            (n_simulations, 1))
-        # Produce a 2d array where rows=simulation and columns=time
-        dr_monte_carlo_array = np.cumprod(1 - np.matmul(dr_monte_carlo_factors, dr_base_array), axis=1)
+        dr_base_array = np.tile(dr_base_array, (n_simulations, 1))
+        dr_monte_carlo_factors = monte_carlo_expression('-DR', values['-DR_MC_TYPE-'], n_simulations)
+        # Produce a 2d array where rows=simulation and columns=time.
+        # Note that if dr_monte_carlo_factors is a single column array then the function should broadcast.
+        dr_monte_carlo_array = np.cumprod(1 / (1 + dr_monte_carlo_factors * dr_base_array), axis=1)
 
         # Prices Array
         reference_price_monte_carlo_table = []
-
+        #print(pr_group_dict)
         for grp in pr_group_dict:
             # Column matrix for simulations.
-            group_monte_carlo_sims = np.reshape(monte_carlo_expression(
+            group_monte_carlo_sims = monte_carlo_expression(
                 f'-PG{grp}',
                 values[f'-PG{grp}_MC_TYPE-'],
-                n_simulations),
-                (n_simulations, 1))
+                n_simulations)
+
             for lin in range(1, pr_group_dict[grp] + 1):
                 reference_price_monte_carlo_table.append({
                     'group': grp,
                     'line': lin,
                     'value': values[f'-PG{grp}_LIN{lin}_ID-'],
                     'prefix': f'-PG{grp}_LIN{lin}',
-                    'real_adj_value': MC_holding_dict[f'-PG{grp}_LIN{lin}_RAV_FULL-'],
-                    'line_monte_carlo_sims': np.reshape(monte_carlo_expression(
+                    'real_adj_value': expression_to_array(n_simulation_periods, f'0,{n_simulation_periods-1}',
+                                                          str(MC_holding_dict[f'-PG{grp}_LIN{lin}_RAV_FULL-'])),
+                    'line_monte_carlo_sims': monte_carlo_expression(
                         f'-PG{grp}_LIN{lin}',
                         values[f'-PG{grp}_LIN{lin}_MC_TYPE-'],
                         n_simulations
-                    ), (n_simulations, 1)),
+                    ),
                     'group_monte_carlo_sims': group_monte_carlo_sims
                 })
         reference_price_monte_carlo_table = pd.DataFrame.from_records(reference_price_monte_carlo_table)
@@ -2796,15 +3301,18 @@ while True:
                 'outcome_monte_carlo_sims': np.full((n_simulations, n_simulation_periods), True)
             })
 
-        event_outcome_table = pd.DataFrame({
-            'event_id': ['blank'],
-            'event': ['blank'],
-            'outcome_id': ['blank'],
-            'scenario': ['blank'],
-            'outcome_monte_carlo_sims': ['blank']
-        })
-
         model_events_list = list(model_events_dict.keys())
+        if len(model_events_list) == 0:
+            event_outcome_table = pd.DataFrame.from_records(event_outcome_records)
+        else:
+            event_outcome_table = pd.DataFrame({
+                'event_id': ['blank'],
+                'event': ['blank'],
+                'outcome_id': ['blank'],
+                'scenario': ['blank'],
+                'outcome_monte_carlo_sims': ['blank']
+            })
+        #print(uniform.rvs(size=(1), random_state=random_generator))
         while len(model_events_list) > 0:
             for model_event in model_events_list:
                 depends_list = model_events_user_settings[f'-EVENT{model_event}_DEPENDS-']
@@ -2859,11 +3367,10 @@ while True:
         quantity_stream_records = []
         for scn in range(0, n_scenarios + 1):
             for grp in qs_group_dict:
-                group_monte_carlo_sims = np.reshape(monte_carlo_expression(
+                group_monte_carlo_sims = monte_carlo_expression(
                     f'-SCN{scn}_QG{grp}',
                     values[f'-SCN{scn}_QG{grp}_MC_TYPE-'],
-                    n_simulations),
-                    (n_simulations, 1))
+                    n_simulations)
                 for lin in range(1, qs_group_dict[grp] + 1):
                     quantity_stream_records.append({
                         'scenario': scn,
@@ -2879,25 +3386,27 @@ while True:
                         'quantity_stream': expression_to_array(n_simulation_periods,
                                                                values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRANGE-'],
                                                                values[f'-SCN{scn}_QG{grp}_LIN{lin}_PQUANT-']),
-                        'line_monte_carlo_sims': np.reshape(monte_carlo_expression(
+                        'line_monte_carlo_sims': monte_carlo_expression(
                             f'-SCN{scn}_QG{grp}_LIN{lin}',
                             values[f'-SCN{scn}_QG{grp}_LIN{lin}_MC_TYPE-'],
                             n_simulations),
-                            (n_simulations, 1)),
                         'group_monte_carlo_sims': group_monte_carlo_sims,
                         'outcome_id': values[f'-SCN{scn}_QG{grp}_LIN{lin}_DEPENDS-']
                     })
         quantity_stream_table = pd.DataFrame.from_records(quantity_stream_records)
-
+        # print(quantity_stream_table.to_string())
         # Create column for the weighted monte carlo shifted quantity streams.
         quantity_stream_table['monte_carlo_streams'] = (quantity_stream_table['line_monte_carlo_sims'] +
                                                         quantity_stream_table['group_monte_carlo_sims'] - 1) * \
                                                        quantity_stream_table['quantity_stream']
 
         # Add the results of the outcome table to the quantity table.
-        quantity_stream_table = pd.merge(quantity_stream_table, event_outcome_table[['outcome_id', 'scenario',
-                                                                                     'outcome_monte_carlo_sims']],
-                                         how='left', on=['outcome_id', 'scenario'])
+        try:
+            quantity_stream_table = pd.merge(quantity_stream_table, event_outcome_table[['outcome_id', 'scenario',
+                                                                                         'outcome_monte_carlo_sims']],
+                                             how='left', on=['outcome_id', 'scenario'])
+        except ValueError:
+            quantity_stream_table['outcome_monte_carlo_sims'] = 1
 
         # Create column for the combined event and stream quantities.
         quantity_stream_table['combined_stream_quantity_events'] = quantity_stream_table['monte_carlo_streams'] * \
