@@ -2218,7 +2218,7 @@ def monte_carlo_expression(prefix, PDF_func, n_simulations):
                            random_state=random_generator)
         return (bnl_a + bnl_b + bnl_c) / 3
     if PDF_func == 'Triangular':
-        return triang.rvs(c=MC_expr_dict['PDF_mode']/(MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min']),
+        return triang.rvs(c=(MC_expr_dict['PDF_mode'] - MC_expr_dict['PDF_min'])/(MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min']),
                           loc=MC_expr_dict['PDF_min'],
                           scale=MC_expr_dict['PDF_max'] - MC_expr_dict['PDF_min'],
                           size=dims,
