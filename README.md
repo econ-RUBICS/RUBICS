@@ -1,6 +1,22 @@
 # RUBICS
 RUBICS (RUB/CS): Random Uncertainty Benefit / Cost Simulator is an open source program to undertake Monte Carlo and Distributional Benefit-Cost Analysis, enabling easy peer review of inputs and results.
 
+RUBICSv1.0.0 STAR Changelog
+
+1. New feature allowing the user to define their own functions and use them to in calculated parameters. The user can upload a series of x and y values and choose and interpolation method (nearest, previous, next, linear, cubic spline, akima, and smoothed cubic spline) to produce a function that can be used in calculated parameters. 
+
+2. Minor changes to the definition of exchange rate and cpi tables to account for changes in how those tables are downloaded. 
+
+3. Minor changes to the list of special mathematical function names. Now include: 'np', 'min', 'max', 'ceil', 'fabs', 'floor', 'trunc', 'exp', 'expm', 'log', 'pow', 'sqrt', 'pi', 'e', 'clip', 'inf'
+
+4. Placeholder code in function sensitivity_display_table() for a future regression analysis operation. Not used in the current version. 
+
+5. New menu options that allow the user to download new data from the WorldBank API (dependent on whether the API is currently working) 
+
+6. Placed RUN event loop in a try, except envelope in order to catch bugs and alert the user, rather than allowing the program to crash entirely. 
+
+7. Minor bug fixes in the calculation of result outputs. 
+
 RUBICSv0.2.0 Changelog
 1. New feature allowing parameters to be defined and used as inputs in price and quantity equations. 
 
