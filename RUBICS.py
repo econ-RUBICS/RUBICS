@@ -4,7 +4,7 @@ RUBICS is intended to be an Open Source program for economists to undertake Mont
 Analysis, enabling the sharing and peer review of inputs and outputs.
 Copyright (C) 2023
 Author: Samuel Miller
-Version: BETA (0.2.0)
+Version: Star (1.0.0)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -64,6 +64,8 @@ from matplotlib.figure import Figure
 from matplotlib.pyplot import savefig
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from openpyxl import load_workbook
+#from sklearn import linear_model
+import requests
 
 
 tbar_icon = os.getcwd() + '/RUBICS ICON.ico'
@@ -91,6 +93,7 @@ def apply_user_settings():
     global n_pr_groups
     global n_scenarios
     global n_params
+    global n_functions
     global MC_update_display
 
     # Add the discount rate data from the user_settings_file to the layout.
@@ -144,6 +147,34 @@ def apply_user_settings():
                     except (ZeroDivisionError, ValueError):
                         DA_table[i][j] = np.nan
 
+    # Add the function from the user_settings file to the layout
+    if 'functions' in user_settings.keys():
+        # Get a list of functions given in the user_settings_file
+        fnc_list_user_settings = [k for k in list(user_settings['functions'].keys()) if 'function_' in k]
+        fnc_list_user_settings_ints = list(map(int, [k.replace('function_', '') for k in fnc_list_user_settings]))
+
+        for fnc in fnc_list_user_settings_ints:
+            # Add missing function fields to the layout if needed
+            while n_functions < fnc:
+                n_functions += 1
+                add_function()
+                if window['-FNC_COLS-'].get_size()[1] < 700:
+                    resize = 280 + window['-FNC_COLS-'].get_size()[1]
+                    set_size(window['-FNC_COLS-'], (None, resize))
+                window.refresh()
+                window['-FNC_COLS-'].contents_changed()
+
+            # Add function data from the user_settings_file to the layout
+            for k_pair in [('ID', f'-FNC{fnc}_ID-'),
+                           ('interpolation_method', f'-FNC{fnc}_INTERP-'),
+                           ('smoothing_parameter', f'-FNC{fnc}_SMOOTHSET-'), ('comments', f'-FNC{fnc}_CM-')]:
+                if k_pair[0] in user_settings['functions'][f'function_{fnc}'].keys():
+                    window[f'{k_pair[1]}'].update(user_settings['functions'][f'function_{fnc}'][f'{k_pair[0]}'])
+            for k_pair in [('x_values', f'-FNC{fnc}_XVALS-'), ('y_values', f'-FNC{fnc}_YVALS-')]:
+                if k_pair[0] in user_settings['functions'][f'function_{fnc}'].keys():
+                    fnc_str = list(map(str, user_settings['functions'][f'function_{fnc}'][f'{k_pair[0]}']))
+                    window[f'{k_pair[1]}'].update('\n'.join(fnc_str))
+
     # Add the parameters from the user_settings file to the layout
     if 'parameters' in user_settings.keys():
         # Get a list of parameters given in the user_settings_file
@@ -169,7 +200,8 @@ def apply_user_settings():
             for k_pair in [('period_range', f'-PAR{par}_PRANGE-'),
                            ('value', f'-PAR{par}_PVALUE-')]:
                 if k_pair[0] in user_settings['parameters'][f'parameter_{par}'].keys():
-                    window[f'{k_pair[1]}'].update('\n'.join(user_settings['parameters'][f'parameter_{par}'][f'{k_pair[0]}']))
+                    par_str = list(map(str, user_settings['parameters'][f'parameter_{par}'][f'{k_pair[0]}']))
+                    window[f'{k_pair[1]}'].update('\n'.join(par_str))
             if 'MC_PDF' in user_settings['parameters'][f'parameter_{par}'].keys():
                 for k_pair in [('PDF_min', f'-PAR{par}_PDFMIN-'), ('PDF_max', f'-PAR{par}_PDFMAX-'),
                                ('PDF_mean', f'-PAR{par}_PDFMEA-'), ('PDF_stdev', f'-PAR{par}_PDFSIG-'),
@@ -780,6 +812,7 @@ def json_settings():
     monte_carlo_dict = {}
     discount_rate_dict = {}
     distribution_dict = {}
+    function_dict_j = {}
     parameter_dict_j = {}
     reference_prices_dict = {}
     event_model_dict = {}
@@ -810,6 +843,16 @@ def json_settings():
             distribution_dict['income_weighting_parameter'] = income_weight_parameter
             distribution_dict['subgroup_average_income'] = income_table
             distribution_dict['subgroup_average_income'][0][0] = ''
+
+    if n_functions >0:
+        for fnc in range(1, n_functions+1):
+            function_dict_j[f'function_{fnc}'] = {}
+            function_dict_j[f'function_{fnc}']['ID'] = values[f'-FNC{fnc}_ID-']
+            function_dict_j[f'function_{fnc}']['x_values'] = values[f'-FNC{fnc}_XVALS-']
+            function_dict_j[f'function_{fnc}']['y_values'] = values[f'-FNC{fnc}_YVALS-']
+            function_dict_j[f'function_{fnc}']['interpolation_method'] = values[f'-FNC{fnc}_INTERP-']
+            function_dict_j[f'function_{fnc}']['smoothing_factor'] = values[f'-FNC{fnc}_SMOOTHSET-']
+            function_dict_j[f'function_{fnc}']['comments'] = values[f'-FNC{fnc}_CM-']
 
     if n_params > 0:
         for par in range(1, n_params+1):
@@ -918,6 +961,7 @@ def json_settings():
         'monte_carlo_settings': monte_carlo_dict,
         'discount_rate_settings': discount_rate_dict,
         'distribution_analysis_settings': distribution_dict,
+        'function_settings': function_dict_j,
         'parameter_settings': parameter_dict_j,
         'reference_prices': reference_prices_dict,
         'event_model': event_model_dict,
@@ -1144,6 +1188,143 @@ def weight_matrix_incomes():
     iwm_window.close()
 
 
+### FUNCTIONS SECTION -------------------------------------------------------------------------------------------------
+n_functions = 0
+function_names = []
+
+def add_function():
+    window.extend_layout(window['-FUNCTIONS-'], [
+        [sg.Frame(f'Function {n_functions}', [
+            [sg.Column([
+                [sg.Text('Function ID:')],
+                [sg.Input(key=f'-FNC{n_functions}_ID-', size=10, enable_events=True)]]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('x values:')],
+                    [sg.Multiline(key=f'-FNC{n_functions}_XVALS-', size=(10, 4), enable_events=True)]
+                ]),
+                sg.Column([
+                    [sg.Text('y values:')],
+                    [sg.Multiline(key=f'-FNC{n_functions}_YVALS-', size=(10, 4), enable_events=True)]
+                ]),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Interpolation\nmethod:')],
+                    [sg.Combo(key=f'-FNC{n_functions}_INTERP-',
+                              values=['Nearest', 'Previous', 'Next', 'Linear', 'Cubic spline', 'Akima', 'Smoothed cubic spline'],
+                              enable_events=True, default_value='Linear', size=15)],
+                    [sg.pin(sg.Text(key=f'-FNC{n_functions}_SMOOTHTXT-', text='Smoothing parameter (0-1):', visible=False))],
+                    [sg.pin(sg.Input(key=f'-FNC{n_functions}_SMOOTHSET-', size=10, visible=False, default_text='0.0'))]
+                ]),
+                sg.Text(text='\U0001F4C8', key=f'-FNC{n_functions}_GRAPH-',
+                        enable_events=True, font=(None, 15)),
+                sg.VerticalSeparator(),
+                sg.Column([
+                    [sg.Text('Comments/Metadata:')],
+                    [sg.Multiline(key=f'-FNC{n_functions}_CM-', size=(40, 4))]
+                ])
+            ]
+        ])]
+    ])
+
+
+def function_popup(function):
+    # get x and y values and plot a graph of the interpolated function.
+    window.Disable()
+
+    xs = np.array(list(map(int, re.split(r'\n', values[f'-FNC{function}_XVALS-']))))
+    ys = np.array(list(map(int, re.split(r'\n', values[f'-FNC{function}_YVALS-']))))
+
+    match values[f'-FNC{function}_INTERP-']:
+        case 'Nearest':
+            print('NEAREST')
+            interper = interpolate.interp1d(xs, ys, kind='nearest')
+        case 'Previous':
+            interper = interpolate.interp1d(xs, ys, kind='previous')
+        case 'Next':
+            interper = interpolate.interp1d(xs, ys, kind='next')
+        case 'Linear':
+            interper = interpolate.interp1d(xs, ys, kind='linear')
+        case 'Cubic spline':
+            interper = interpolate.CubicSpline(xs, ys)
+        case 'Akima':
+            interper = interpolate.Akima1DInterpolator(xs, ys)
+        case 'Smoothed cubic spline':
+            '''
+            The maximum practical value for s is the number of squared residuals when the number of knots equals 2,
+            that is, when the number of knots is 2. Since the UnivariateSpline starts at 2 knots and increases them until
+            the squared residuals are lower than a given s, setting s to np.inf forces the knots to equal 2, and the maximum 
+            allowable s value can be determined. From there, a normalised smoother variable can be used to determined a 
+            practically useful s. 
+            '''
+            smoother = float(values[f'-FNC{function}_SMOOTHSET-'])
+            max_sq_resids = interpolate.UnivariateSpline(xs, ys, s=np.inf).get_residual()
+            interper = interpolate.UnivariateSpline(xs, ys, s=(smoother*max_sq_resids))
+
+    interp_layout = [
+        [sg.Frame('', [[sg.Canvas(key='-INTERP_CANVAS-', expand_x=True, expand_y=True, )]], size=(640, 480))],
+        [sg.Button('Close')]
+    ]
+
+    interp_window = sg.Window('Interpolation', interp_layout, finalize=True, resizable=True,
+                                  font=('Helvetica', 10))
+
+    fig = Figure(figsize=(5, 4), dpi=100)
+    ax = fig.add_subplot()
+    canvas = Canvas(fig, interp_window['-INTERP_CANVAS-'].Widget)
+
+    ax.set_title('Interpolation function')
+    ax.set_ylabel("Y values")
+    ax.set_xlabel("X values")
+    ax.plot(xs, ys, 'ok', ms=5)
+    x_line = np.linspace(min(xs), max(xs), 1000)
+    ax.plot(x_line, interper(x_line), 'saddlebrown', lw=3)
+    canvas.draw()
+
+    while True:
+        interp_event, interp_values = interp_window.read()
+
+        if interp_event == sg.WIN_CLOSED or interp_event == 'Close':
+            break
+
+    interp_window.close()
+    window.Enable()
+    window.BringToFront()
+    window.Read()
+
+
+def assign_function(function):
+    xs = np.array(list(map(float, re.split(r'\n', values[f'-FNC{function}_XVALS-']))))
+    ys = np.array(list(map(float, re.split(r'\n', values[f'-FNC{function}_YVALS-']))))
+
+    match values[f'-FNC{function}_INTERP-']:
+        case 'Nearest':
+            print('NEAREST')
+            interper = interpolate.interp1d(xs, ys, kind='nearest')
+        case 'Previous':
+            interper = interpolate.interp1d(xs, ys, kind='previous')
+        case 'Next':
+            interper = interpolate.interp1d(xs, ys, kind='next')
+        case 'Linear':
+            interper = interpolate.interp1d(xs, ys, kind='linear')
+        case 'Cubic spline':
+            interper = interpolate.CubicSpline(xs, ys)
+        case 'Akima':
+            interper = interpolate.Akima1DInterpolator(xs, ys)
+        case 'Smoothed cubic spline':
+            '''
+            The maximum practical value for s is the number of squared residuals when the number of knots equals 2,
+            that is, when the number of knots is 2. Since the UnivariateSpline starts at 2 knots and increases them until
+            the squared residuals are lower than a given s, setting s to np.inf forces the knots to equal 2, and the maximum 
+            allowable s value can be determined. From there, a normalised smoother variable can be used to determined a 
+            practically useful s. 
+            '''
+            smoother = float(values[f'-FNC{function}_SMOOTHSET-'])
+            max_sq_resids = interpolate.UnivariateSpline(xs, ys, s=np.inf).get_residual()
+            interper = interpolate.UnivariateSpline(xs, ys, s=(smoother*max_sq_resids))
+
+    return interper
+
 ### PARAMETERS SECTION ------------------------------------------------------------------------------------------------
 n_params = 0
 
@@ -1236,7 +1417,7 @@ def cpi_numerator(econ_code, current_year):
     global cpi_numr_yr
     for y in range(current_year, 1959, -1):
         try:
-            cpi_numr = cpi_table.loc[econ_code, f'YR{y}']
+            cpi_numr = cpi_table.loc[econ_code, f'{y}']
         except KeyError:
             cpi_numr = np.NaN
 
@@ -1250,7 +1431,7 @@ def cpi_numerator(econ_code, current_year):
 # It will be up to the analyst to familiarise themselves with the CPI data and notice irregularities.
 def cpi_factor(econ_code, value_year):
     try:
-        cpi_denom = cpi_table.loc[econ_code, f'YR{value_year}']
+        cpi_denom = cpi_table.loc[econ_code, f'{value_year}']
     except KeyError:
         cpi_denom = cpi_numr
 
@@ -1273,12 +1454,12 @@ def exchange_rate(econ_code, start_year, period, metric):
         start_year_valid = start_year
         while True:
             try:
-                exchr_table.loc[econ_code, f'YR{start_year_valid}']
+                exchr_table.loc[econ_code, f'{start_year_valid}']
                 break
             except KeyError:
                 start_year_valid -= 1
 
-        years = [f'YR{yr}' for yr in range(start_year_valid, start_year_valid - exchr_period_dict[period], -1)]
+        years = [f'{yr}' for yr in range(start_year_valid, start_year_valid - exchr_period_dict[period], -1)]
     # This returns a series.
     filter_exchr_table = exchr_table.loc[econ_code, years]
     if metric == 'Median':
@@ -2047,7 +2228,7 @@ def event_model_builder():
 
 ### RESULTS SECTION --------------------------------------------------------------------------------------------------
 sim_initialisation = True
-math_expressions = ['ceil', 'fabs', 'floor', 'trunc', 'exp', 'expm', 'log', 'pow', 'sqrt', 'pi', 'e']
+math_expressions = ['np', 'min', 'max', 'ceil', 'fabs', 'floor', 'trunc', 'exp', 'expm', 'log', 'pow', 'sqrt', 'pi', 'e', 'clip', 'inf']
 
 def expression_to_array(n_periods, period_ranges, expressions):
     period_ranges_list = period_ranges.split('\n')
@@ -2067,13 +2248,16 @@ def expression_to_array(n_periods, period_ranges, expressions):
             end += 1
         expression = expressions_list[line]
 
-        # Search the expression for any parameter strings and replace them with a dictionary address
+        # Search the expression for any parameter or function strings and replace them with a dictionary address
         strs_to_replace = re.findall(r'[a-zA-Z^]+', expression)
         strs_iters = re.finditer(r'[a-zA-Z^]+', expression)
         replacement_strs = []
         for m in range(0, len(strs_to_replace)):
             if strs_to_replace[m] not in math_expressions:
-                replacement_strs.append('parameter_dict["' + f'{strs_to_replace[m]}' + f'"]["expression"][:,{start}:{end}]')
+                if strs_to_replace[m] in function_names:
+                    replacement_strs.append('function_dict[' + f'"{strs_to_replace[m]}"]')
+                else:
+                    replacement_strs.append('parameter_dict["' + f'{strs_to_replace[m]}' + f'"]["expression"][:,{start}:{end}]')
             else:
                 replacement_strs.append(f'np.{strs_to_replace[m]}')
         #replacement_strs = ['parameter_dict["' + f'{ps}' + f'"]["expression"][:,{start}:{end}]' for ps in strs_to_replace]
@@ -2085,7 +2269,7 @@ def expression_to_array(n_periods, period_ranges, expressions):
             rep += 1
         for r in reversed(replacement_list):
             expression = expression[:r[0].start()] + r[1] + expression[r[0].end():]
-        #print(expression)
+        print(expression)
         #t = period_array[start:end]
         out_array[:, start:end] = eval(f'{expression}')
         #print(out_array)
@@ -2456,8 +2640,163 @@ def results_display_table(run, measure, weights, net_scn_z, distribution_segment
     ml_width = len(cba_results[0])
 
     cba_results = '\n'.join(cba_results)
-
+    print(cba_results)
     return cba_results, ml_height, ml_width
+
+
+def sensitivity_display_table(run, weights, net_scn_z, distribution_segments=['All']):
+    regression_table = run_results[run][['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
+                                      'geography', 'weight', 'discounted_total_value']].copy()
+
+    # print(display_table.to_string())
+    if distribution_segments != ['All']:
+        regression_table['stk_geo'] = list(zip(regression_table['stakeholder'], regression_table['geography']))
+        regression_table = regression_table.loc[regression_table['stk_geo'].isin(distribution_segments)]
+
+    # Add a zero benefits and costs line to the display table for each scenario to assist with handling null cases
+    for scn in range(0, n_scenarios + 1):
+        display_table_null = pd.DataFrame(
+            [[scn, '', '', 'Costs', '', '', '', 1.0, np.zeros(n_simulations)],
+             [scn, '', '', 'Benefits', '', '', '', 1.0, np.zeros(n_simulations)]],
+            columns=['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
+                     'geography', 'weight', 'discounted_total_value'])
+        regression_table = pd.concat([regression_table, display_table_null])
+
+    if net_scn_z == 'Yes':
+        scn_z_frame = regression_table.loc[regression_table['scenario'] == 0].rename(
+            columns={'discounted_total_value': 'discounted_total_value_0'})
+
+        regression_table = pd.merge(regression_table, scn_z_frame[['group_id', 'line_id', 'discounted_total_value_0']],
+                                 how='left', on=['group_id', 'line_id'])
+
+        regression_table['discounted_total_value'] = regression_table['discounted_total_value'] - regression_table[
+            'discounted_total_value_0']
+
+    if weights == 'Weighted':
+        regression_table['discounted_total_value'] = regression_table['discounted_total_value'] * regression_table['weight']
+
+    regression_table = regression_table[['scenario', 'group_id', 'line_id', 'type', 'value', 'stakeholder',
+                                   'geography', 'discounted_total_value']]
+
+    # Calculate the Raw Net Benefits for each scenario.
+    raw_total_records = {}
+    for scn in range(0, n_scenarios + 1):
+        raw_benefits = regression_table.loc[
+            ((regression_table['scenario'] == scn) & (regression_table['type'] == 'Benefits'))]
+        raw_costs = regression_table.loc[
+            ((regression_table['scenario'] == scn) & (regression_table['type'] == 'Costs'))]
+        raw_npv = raw_benefits.discounted_total_value.sum() - raw_costs.discounted_total_value.sum()
+        raw_npv_argsort = np.argsort(raw_npv)
+        raw_total_records[f'scn_{scn}'] = raw_npv_argsort
+    regression_table['disc_tot_val_argsort'] = regression_table.apply(
+        lambda row: np.take_along_axis(row['discounted_total_value'],
+                                       raw_total_records[f'scn_{row["scenario"]}'],
+                                       axis=0), axis=1)
+
+    # Divide the discounted total value for each line item by its
+
+    '''if measure == 'Average':
+        regression_table['calc_total'] = regression_table.discounted_total_value.apply(lambda x: np.average(x))
+    else:
+        # If the user selects a percentile to display, calculate and order npv for each scenario
+        # Calculate the Raw Net Benefits for each scenario.
+        raw_total_records = {}
+        for scn in range(0, n_scenarios + 1):
+            raw_benefits = regression_table.loc[
+                ((regression_table['scenario'] == scn) & (regression_table['type'] == 'Benefits'))]
+            raw_costs = regression_table.loc[((regression_table['scenario'] == scn) & (regression_table['type'] == 'Costs'))]
+            raw_npv = raw_benefits.discounted_total_value.sum() - raw_costs.discounted_total_value.sum()
+            raw_npv_argsort = np.argsort(raw_npv)
+            raw_total_records[f'scn_{scn}'] = raw_npv_argsort
+        regression_table['disc_tot_val_argsort'] = regression_table.apply(
+            lambda row: np.take_along_axis(row['discounted_total_value'],
+                                           raw_total_records[f'scn_{row["scenario"]}'],
+                                           axis=0), axis=1)
+
+        # Find the representative median in a 1% window around the percentile nominated by the user.
+        measure_dict = {'P5': 5, 'P10': 10, 'P20': 20, 'P30': 30, 'P40': 40, 'P50': 50, 'P60': 60, 'P70': 70, 'P80': 80,
+                        'P90': 90, 'P95': 95}
+        percentile = measure_dict[measure]
+        lower_index = int(np.around((n_simulations / 100) * (percentile - 1), 0))
+        upper_index = int(np.around((n_simulations / 100) * (percentile + 1), 0))
+        regression_table['calc_total'] = regression_table.disc_tot_val_argsort.apply(
+            lambda x: np.median(x[lower_index:upper_index]))'''
+
+    # Calculate Total Costs
+    regression_table_costs = regression_table.loc[(((regression_table['type'] == 'Costs') & (regression_table['calc_total'] >= 0)) |
+                                             ((regression_table['type'] == 'Benefits') & (
+                                                     regression_table['calc_total'] < 0)))].copy()
+    # print(display_table_costs.to_string())
+    regression_table_costs['calc_total'] = regression_table_costs['calc_total'].abs()
+    regression_table_costs = pd.pivot_table(regression_table_costs, values='calc_total', columns=['scenario'],
+                                         index=['group_id', 'line_id'], aggfunc=np.sum)
+    # print(display_table_costs.to_string())
+
+    # Calculate Total Benefits
+    regression_table_benefits = regression_table.loc[
+        (((regression_table['type'] == 'Benefits') & (regression_table['calc_total'] >= 0)) |
+         ((regression_table['type'] == 'Costs') & (regression_table['calc_total'] < 0)))].copy()
+    regression_table_benefits['calc_total'] = regression_table_benefits['calc_total'].abs()
+
+    regression_table_benefits = pd.pivot_table(regression_table_benefits, values='calc_total', columns=['scenario'],
+                                            index=['group_id', 'line_id'], aggfunc=np.sum)
+
+    # Calculate Net Benefits
+    regression_table_npv = pd.pivot_table(regression_table, values='calc_total', columns=['scenario'],
+                                       index=['type'], aggfunc=np.sum)
+    regression_table_npv.loc['Costs'] = regression_table_npv.loc['Costs'] * -1
+
+    regression_table = pd.pivot_table(regression_table, values='calc_total', columns=['scenario'],
+                                   index=['type', 'group_id', 'line_id'], aggfunc=np.sum)
+    regression_table.sort_index(level=0, ascending=False, inplace=True)
+
+    regression_table.loc['TOTAL COSTS', :] = regression_table_costs.sum().values
+    regression_table.loc['TOTAL BENEFITS', :] = regression_table_benefits.sum().values
+    regression_table.loc['NPV', :] = regression_table_npv.sum().values
+
+    '''if bcr_denom == 'All':
+        display_table.loc['BCR', :] = display_table.loc[['TOTAL BENEFITS']].values / display_table.loc[
+            ['TOTAL COSTS']].values
+        # Will give RuntimeWarning: invalid value encountered in divide when calculating Net of Scn0 due to div by 0
+    else:
+        try:
+            display_table.loc['BCR*', :] = (display_table.loc[['NPV']].values + display_table.loc[
+                ('Costs', bcr_denom,)].sum().values) / \
+                                           display_table.loc[('Costs', bcr_denom,)].sum().values
+        except KeyError:
+            display_table.loc['BCR', :] = display_table.loc[['TOTAL BENEFITS']].values / display_table.loc[
+                ['TOTAL COSTS']].values
+            result_windows[run][f'-RUN{run_number}_BCR_DENOM-'].update(value='All')
+            fallback_bcr = True'''
+    # print(display_table.to_string())
+
+    cba_results = regression_table.round(3).to_string()
+    cba_results = cba_results.split('\n')
+    ml_width = max(map(len, cba_results))
+    ml_height = len(cba_results)
+
+    n_benefits = regression_table.loc[['Benefits']].shape[0]
+
+    blank_line = ' ' * ml_width
+    dash_line = '_' * ml_width
+    dot_line = '.' * ml_width
+
+    cba_results.insert(ml_height - 2, dot_line)
+    cba_results.insert(ml_height - 4, dash_line)
+    cba_results.insert(ml_height - 4, blank_line)
+    cba_results.insert(ml_height - 4 - n_benefits, blank_line)
+    cba_results.insert(2, dash_line)
+    cba_results.insert(1, dot_line)
+
+    if bcr_denom != 'All' and fallback_bcr is False:
+        cba_results.append(f'*BCR denominator is {bcr_denom}')
+
+    ml_height = len(cba_results) + 1
+    ml_width = len(cba_results[0])
+
+    cba_results = '\n'.join(cba_results)
+    print(cba_results)
+    return cba_results
 
 
 def plot_histo_cdf(run_number, scenario, weights, net_scn_z, distribution_segments):
@@ -2581,6 +2920,12 @@ def result_popup(run_number):
                                                              run_cba_settings[run_number]['distr_segs'],
                                                              run_cba_settings[run_number]['bcr_denom'])
 
+    # Sensitivity analysis for a future version
+    '''sensitivity_results = sensitivity_display_table(run_number,
+                                                             run_cba_settings[run_number]['use_weights'],
+                                                             run_cba_settings[run_number]['net_z'],
+                                                             run_cba_settings[run_number]['distr_segs'])'''
+
     results_layout = [
         [sg.Frame(title='Initialisation', vertical_alignment='top', layout=[
             [sg.Text(f'Date/Time: {dt.datetime.now()}', key=f'-RUN{run_number}_DATE-')],
@@ -2612,6 +2957,23 @@ def result_popup(run_number):
          ])]
     ]
 
+    # Sensitivity code for a future version.
+    '''sensitivity_layout = [
+        [sg.Frame(title='Description', vertical_alignment=top, layout=[
+            [sg.Text('The sensitivity analysis performed by RUBICS follows from Frey, C. H., & Patil, S. R. (2002), who identify Regression Analysis as a method of analysing the responsiveness of dependent variables (here, NPV) to changes in indepedent variables.')],
+            [sg.Text('RUBICS first standardises the NPV and all line items in the CBA by dividing them by their standard deviation. It then performs a linear regression, predicting NPV on all line item regressors, such that the coefficients of each line item indicate the degree to which a 1-unit movement in the standard deviation of a line item results in a change in the standard deviation of the NPV.')],
+            [sg.Text('The magnitude (absolute value), of the coefficients can then be directly compared to determine which line items bear the greatest responsibility for variation in the NPV.')],
+            [sg.Text('Frey, C. H., & Patil, S. R. (2002). Identification and Review of Sensitivity Analysis Methods. Risk Analysis, 22(3), 553–578. https://doi.org/10.1111/0272-4332.00039')]
+        ])],
+        [sg.Frame(title='Regression results', layout=[
+            [sg.Multiline(default_text=sensitivity_results,
+                          key=f'-RUN{run_number}_SENS_DISPLAY-', justification='left', font=('Courier New', 11),
+                          write_only=True, no_scrollbar=True, size=(ml_width, ml_height)
+                          )]
+
+    ])]
+    ]'''
+
     user_settings_text = json_settings()
     user_settings_readout = [
         [sg.Multiline(key=f'-RUN{run_number}_SETTINGS_READOUT-', size=(70, 50), disabled=True,
@@ -2619,8 +2981,10 @@ def result_popup(run_number):
         [sg.Button(button_text='Save Settings as .json', key=f'-RUN{run_number}_SAVE_SETS-')]
     ]
 
+    # Including the sensitivity analysis section is a task for another time.
     results_window_layout = [[sg.TabGroup([[
         sg.Tab(title='CBA results', layout=results_layout),
+        #sg.Tab(title='Sensitivity analysis', layout=sensitivity_layout),
         sg.Tab(title='Settings readout', layout=user_settings_readout)
     ]])]]
 
@@ -2721,8 +3085,12 @@ def loop_result_window_events(run):
 ### DISCOUNT RATE SECTION --------------------------------------------------------------------------------------------
 dr_layout = [
     # Load and save settings menu.
-    [sg.Menu([['&File', ['&Load Settings', ['&From .json', '&From .xlsx'],
-                         '&Save Settings']]])],
+    [sg.Menu([['&File',
+               ['&Load Settings', ['&From .json', '&From .xlsx'],
+                '&Save Settings']],
+              ['&Presets',
+               ['&Update CPI from WorldBank', '&Update Exchange Rates from WorldBank']]
+              ])],
 
     # Get discount rate method.
     [sg.Text('Discounting method'),
@@ -2776,6 +3144,19 @@ da_layout = [
                     relief="groove", border_width=1))],
     [sg.Button('Input Basic Weights', key='-DA_INPUT WEIGHTS_BASIC-', disabled=True)],
     [sg.Button('Input Income Weights', key='-DA_INPUT WEIGHTS_INCOME-', disabled=True)]
+]
+
+### FUNCTIONS SECTION -------------------------------------------------------------------------------------------------
+fnc_layout = [
+    [sg.Text('This section allows you to interpolate a continuous 1d function from discrete data points.')],
+    [sg.Text('Functions for which the user already has a parametised form can be used directly in the Parameter section.')],
+    [sg.Text('The interpolation options here are intended to fit exactly through known x,y points. If attempting to fit noisy \ndata it is recommended to explicitly parametise the relationship eg using regression methods, and apply the \ncoefficients to the data in the Parameters section.')],
+    [sg.Text('The Smoothed cubic spline is provided to assist the analyst to model non-linear relationships, however the\nbehaviour of the function is highly senstitive to the choice of smoothing function.')],
+    [sg.Button('Add Function')],
+    [sg.Column(key='-FNC_COLS-', size=(1500, 280), scrollable=True, vertical_scroll_only=True,
+               layout=[
+                   [sg.Frame(title='Functions', key='-FUNCTIONS-',  layout=[])]
+               ])]
 ]
 
 ### PARAMETER VALUES SECTION ------------------------------------------------------------------------------------------
@@ -2843,6 +3224,7 @@ layout = [
     [sg.TabGroup([[
         sg.Tab(title='Discount Rate', layout=dr_layout),
         sg.Tab(title='Distribution Analysis', layout=da_layout),
+        sg.Tab(title='Functions', layout=fnc_layout),
         sg.Tab(title='Parameters', layout=par_layout),
         sg.Tab(title='Reference Prices', layout=pr_layout),
         sg.Tab(title='Quantity Scenarios', layout=qnt_layout),
@@ -2897,6 +3279,36 @@ while True:
                                               save_as=True),
                             'w')
         file_to_save.write(json_settings())
+
+
+    ### WORLD BANK DATA SETTINGS --------------------------------------------------------------------------------------
+    if event == 'Update CPI from WorldBank':
+        api = f'http://api.worldbank.org/v2/country/all/indicator/FP.CPI.TOTL?date=1960:{current_year + 1}&format=json&per_page=20000'
+        api_req = requests.get(api)
+        if api_req.status_code == 200:
+            raw_json = api_req.json()
+            json_table = pd.json_normalize(raw_json[1])
+            json_table = json_table.loc[json_table['countryiso3code'] != np.NaN]
+            json_table = json_table.set_index(['countryiso3code', 'date'], append=True)
+            json_table = json_table.pivot_table(index='countryiso3code', columns='date', values='value').rename_axis(
+                'economy')
+            json_table.to_csv(os.getcwd() + '/cpi.csv', index='economy')
+            cpi_table = pd.read_csv(os.getcwd() + '/cpi.csv', index_col='economy')
+        else:
+            sg.popup_quick_message("The API request failed. This may be because the World Bank API is offline.")
+
+    if event == 'Update Exchange Rates from WorldBank':
+        api = f'http://api.worldbank.org/v2/country/all/indicator/DPANUSSPB?date=1987:{current_year+1}&format=json&per_page=10000'
+        api_req = requests.get(api)
+        if api_req.status_code == 200:
+            raw_json = api_req.json()
+            json_table = pd.json_normalize(raw_json[1]).pivot(index='country.id', columns='date',
+                                                              values='value').rename_axis('economy')
+            json_table.to_csv(os.getcwd() + '/exchr.csv', index='economy')
+            exchr_table = pd.read_csv(os.getcwd() + '/exchr.csv', index_col='economy')
+        else:
+            sg.popup_quick_message("The API request failed. This may be because the World Bank API is offline.")
+
 
     ### DISCOUNT RATE EVENTS ------------------------------------------------------------------------------------------
     # If dropdown options are chosen, make fields visible based on input
@@ -2995,6 +3407,33 @@ while True:
     if re.match(r'-PAR\d*_MC_TYPE-', event):
         MC_holding_dict = get_pdf_settings(event)
         window.refresh()
+
+    ### FUNCTION EVENTS -----------------------------------------------------------------------------------------------
+    # Add a new function when required.
+    if event == 'Add Function':
+        n_functions += 1
+        add_function()
+
+    # If the Smoothed Cubic Function is selected, make the smoothing parameter option field visible.
+    if any([re.match(r'-FNC\d*_INTERP-', event)]):
+        fnc = [int(g) for g in re.findall(r'\d+', event)][0]
+        if values[f'-FNC{fnc}_INTERP-'] == 'Smoothed cubic spline':
+            window[f'-FNC{fnc}_SMOOTHTXT-'].update(visible=True)
+            window[f'-FNC{fnc}_SMOOTHSET-'].update(visible=True)
+        else:
+            window[f'-FNC{fnc}_SMOOTHTXT-'].update(visible=False)
+            window[f'-FNC{fnc}_SMOOTHSET-'].update(visible=False)
+        window.refresh()
+
+        if any([re.match(r'-FUNC\d*_GRAPH-', event)]):
+            fnc = [int(g) for g in re.findall(r'\d+', event)][0]
+            function_popup(values[f'-FNC{fnc}_XVALS-'], values[f'-FNC{fnc}_YVALS-'], values[f'-FNC{fnc}_INTERP-'])
+
+    # Create a popup to preview the smoothing function on the data provided.
+    if any([re.match(r'-FNC\d*_GRAPH-', event)]):
+        fnc = [int(g) for g in re.findall(r'\d+', event)][0]
+        function_popup(fnc)
+
 
     ### REFERENCE PRICES EVENTS ---------------------------------------------------------------------------------------
     if event == '-ADD_PRICE_GROUP-':
@@ -3128,9 +3567,10 @@ while True:
         for scn in range(0, n_scenarios + 1):
             for grp in range(1, len(qs_group_dict) + 1):
                 for lin in range(1, qs_group_dict[grp] + 1):
-                    price_group_line = [int(g) for g in re.findall(r'\d+', next(
+                    price_group_line = [grp, lin]
+                    '''price_group_line = [int(g) for g in re.findall(r'\d+', next(
                         key for key, value in values.items() if
-                        value == values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRICE-'] and key[0:3] == '-PG'))]
+                        value == values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRICE-'] and key[0:3] == '-PG'))]'''
                     try:
                         price_unit_text = str(
                             MC_holding_dict[f'-PG{price_group_line[0]}_LIN{price_group_line[1]}_RAV_FULL-']) + '/' + values[f'-PG{price_group_line[0]}_LIN{price_group_line[1]}_UN-']
@@ -3166,306 +3606,333 @@ while True:
 
     # RESULTS EVENTS ---------------------------------------------------------------------------------------------------
     if event == '-RES_RUN-':
-        # Prepare Random Number Generators and Simulation Counter
-        seed = int(values['-RES_SET_SEED-'])
-        random_generator = np.random.default_rng(seed)
-        n_simulations = int(values['-RES_NUM_SIMS-'])
-        split_pranges = [list(map(int, re.split(',|\n', values[key]))) for key in values if 'PRANGE-' in str(key)]
-        split_pranges_flat = [period for sublist in split_pranges for period in sublist]
-        # Get the maximum number of simulation periods from the Quantity Scenarios Tab
-        n_simulation_periods = np.amax(np.array(split_pranges_flat)) + 1
-        # Create a map of ones of the size of the total arrays to facilitate broadcasting to the right shape.
-        one_map = np.ones((n_simulations, n_simulation_periods))
-
-        # Parameters Dictionary
-        parameter_dict = {}
-        parameter_dict['t'] = {}
-        parameter_dict['t']['expression'] = np.linspace(0, n_simulation_periods - 1, num=n_simulation_periods)*one_map
-        if n_params > 0:
-            parameter_checklist = []
-            for par in range(1, n_params + 1):
-                parameter_checklist.append(values[f'-PAR{par}_ID-'])
-            for par in range(1, n_params+1):
-                parameter_dict[f'{values[f"-PAR{par}_ID-"]}'] = {}
-                parameter_dict[f'{values[f"-PAR{par}_ID-"]}']['index'] = par
-                parameter_dict[f'{values[f"-PAR{par}_ID-"]}']['expression'] = 'EMPTY'
-
-            while len(parameter_checklist) > 0:
-                for par in parameter_checklist:
-                    # Check to see if the parameter has any dependencies that have not been calculated yet.
-                    if parameter_dict[f'{par}']['expression'] == 'EMPTY':
-                        par_skip_flag = False
-                        p_n = parameter_dict[par]['index']
-                        par_deps_list = re.findall(r'[a-zA-Z^]+', values[f'-PAR{p_n}_PVALUE-'])
-                        par_deps_list = [m for m in par_deps_list if m not in math_expressions]
-                        for par_dep in par_deps_list:
-                            if parameter_dict[f'{par_dep}']['expression'] == 'EMPTY':
-                                par_skip_flag = True
-                                break
-                        if par_skip_flag is not True:
-                            par_num = parameter_dict[f'{par}']['index']
-                            parameter_dict[f'{par}']['expression'] = expression_to_array(
-                                n_simulation_periods,
-                                values[f'-PAR{par_num}_PRANGE-'],
-                                values[f'-PAR{par_num}_PVALUE-'])
-                            # Broadcast Monte Carlo random noise array over the expression array.
-                            par_monte_carlo_sims = monte_carlo_expression(
-                                f'-PAR{par_num}',
-                                values[f'-PAR{par_num}_MC_TYPE-'],
-                                n_simulations)
-                            parameter_dict[f'{par}']['expression'] = parameter_dict[f'{par}']['expression']*par_monte_carlo_sims
-                            parameter_checklist.remove(par)
-                            #np.savetxt(f"D:/Local Account/Documents/MonteCarlo CBA/Dev Diaries/ESA_CBA_FORUM_2023.{par}.csv", parameter_dict[f'{par}']['expression'], delimiter=',')
-
-        # Discount Rate Array
-        if values['-DR_TYPE-'] == 'Constant':
-            dr_base_array = np.full((1, n_simulation_periods), float(values['-DR_MAIN-']) / 100)
-        elif values['-DR_TYPE-'] == 'Stepped':
-            step_ranges_list = values['-DR_STEP_RANGE-'].split('\n')
-            step_rates_list = values['-DR_STEP_RATE-'].split('\n')
-            n_steps = len(step_ranges_list)
-            dr_base_array = np.zeros(n_simulation_periods)
-            end = 0
-            for step in range(0, n_steps):
-                start, end = map(int, step_ranges_list[step].split(','))
-                end += 1
-                dr_base_array[start:end] = float(step_rates_list[step]) / 100
-            if end <= n_simulation_periods:
-                dr_base_array[end:n_simulation_periods] = float(values['-DR_STEP_BASE-']) / 100
-        elif values['-DR_TYPE-'] == 'Gamma time declining':
-            mu = float(values['-DR_MAIN-']) / 100
-            sig = float(values['-DR_SIG-']) / 100
-            dr_base_array = np.array([(mu / (1 + ((t - 1) * sig ** 2) / mu)) for t in range(0, n_simulation_periods)])
-        dr_base_array[0][0] = 0
-        dr_base_array = np.tile(dr_base_array, (n_simulations, 1))
-        dr_monte_carlo_factors = monte_carlo_expression('-DR', values['-DR_MC_TYPE-'], n_simulations)
-        # Produce a 2d array where rows=simulation and columns=time.
-        # Note that if dr_monte_carlo_factors is a single column array then the function should broadcast.
-        dr_monte_carlo_array = np.cumprod(1 / (1 + dr_monte_carlo_factors * dr_base_array), axis=1)
-
-        # Prices Array
-        reference_price_monte_carlo_table = []
-        #print(pr_group_dict)
-        for grp in pr_group_dict:
-            # Column matrix for simulations.
-            group_monte_carlo_sims = monte_carlo_expression(
-                f'-PG{grp}',
-                values[f'-PG{grp}_MC_TYPE-'],
-                n_simulations)
-
-            for lin in range(1, pr_group_dict[grp] + 1):
-                reference_price_monte_carlo_table.append({
-                    'group': grp,
-                    'line': lin,
-                    'value': values[f'-PG{grp}_LIN{lin}_ID-'],
-                    'prefix': f'-PG{grp}_LIN{lin}',
-                    'real_adj_value': expression_to_array(n_simulation_periods, f'0,{n_simulation_periods-1}',
-                                                          str(MC_holding_dict[f'-PG{grp}_LIN{lin}_RAV_FULL-'])),
-                    'line_monte_carlo_sims': monte_carlo_expression(
-                        f'-PG{grp}_LIN{lin}',
-                        values[f'-PG{grp}_LIN{lin}_MC_TYPE-'],
-                        n_simulations
-                    ),
-                    'group_monte_carlo_sims': group_monte_carlo_sims
-                })
-        reference_price_monte_carlo_table = pd.DataFrame.from_records(reference_price_monte_carlo_table)
-
-        # Create Column matrix for the weighted monte carlo-shifted values.
-        reference_price_monte_carlo_table['monte_carlo_values'] = (reference_price_monte_carlo_table[
-                                                                       'line_monte_carlo_sims'] +
-                                                                   reference_price_monte_carlo_table[
-                                                                       'group_monte_carlo_sims'] - 1) * \
-                                                                  reference_price_monte_carlo_table['real_adj_value']
-
-        # Event Outcomes Array
-        # Convert shorthands to appropriate data.
-        for scn in range(0, n_scenarios + 1):
-            for model_event in range(1, len(model_events_dict) + 1):
-                for outs in range(1, model_events_dict[model_event] + 1):
-                    for suffix in ['RANGE', 'WEIGHT', 'NOREPS', 'MAXREPS']:
-                        if model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_{suffix}-'] == '<<<':
-                            model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_{suffix}-'] = \
-                                model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{0}_{suffix}-']
-                    if model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_MAXREPS-'] == 'None':
-                        model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_MAXREPS-'] = '-1'
-
-        event_outcome_records = []
-        # Inlcude a 'none' record for where there are no dependent events.
-        for scn in range(0, n_scenarios + 1):
-            event_outcome_records.append({
-                'event_id': 'None',
-                'event': 'None',
-                'outcome_id': 'None',
-                'outcome': 'None',
-                'scenario': scn,
-                'outcome_monte_carlo_sims': np.full((n_simulations, n_simulation_periods), True)
-            })
-
-        model_events_list = list(model_events_dict.keys())
-        if len(model_events_list) == 0:
-            event_outcome_table = pd.DataFrame.from_records(event_outcome_records)
-        else:
-            event_outcome_table = pd.DataFrame({
-                'event_id': ['blank'],
-                'event': ['blank'],
-                'outcome_id': ['blank'],
-                'scenario': ['blank'],
-                'outcome_monte_carlo_sims': ['blank']
-            })
-        #print(uniform.rvs(size=(1), random_state=random_generator))
-        while len(model_events_list) > 0:
-            for model_event in model_events_list:
-                depends_list = model_events_user_settings[f'-EVENT{model_event}_DEPENDS-']
-                if all(depend in event_outcome_table['outcome_id'].tolist() for depend in depends_list):
-                    model_event_monte_carlo_sims = uniform.rvs(size=(n_simulations, n_simulation_periods),
-                                                               random_state=random_generator)
-                    for scn in range(0, n_scenarios + 1):
-
-                        # Filter the table for the outcomes and scenarios needed, prepare the dependency mask.
-                        if not depends_list:
-                            model_event_depends_mask = np.ones((n_simulations, n_simulation_periods), dtype=int)
-                        else:
-                            depends_stack = \
-                                event_outcome_table.loc[(event_outcome_table['outcome_id'].isin(depends_list)) &
-                                                        (event_outcome_table['scenario'] == scn)][
-                                    'outcome_monte_carlo_sims'].tolist()
-                            depends_stack.append((np.full((n_simulations, n_simulation_periods), True)))
-                            model_event_depends_mask = np.prod(depends_stack, axis=0)
-
-                        model_event_out_weights = np.stack([np.array(expression_to_array(n_simulation_periods,
-                                                                                         model_events_user_settings[
-                                                                                             f'-EVENT{model_event}_OUTCOME{o}_SCN{scn}_RANGE-'],
-                                                                                         model_events_user_settings[
-                                                                                             f'-EVENT{model_event}_OUTCOME{o}_SCN{scn}_WEIGHT-']))
-                                                            for o in range(1, model_events_dict[model_event] + 1)])
-
-                        model_event_out_noreps = np.stack(
-                            [int(model_events_user_settings[f'-EVENT{model_event}_OUTCOME{o}_SCN{scn}_NOREPS-'])
-                             for o in range(1, model_events_dict[model_event] + 1)])
-
-                        model_event_out_maxreps = np.stack(
-                            [int(model_events_user_settings[f'-EVENT{model_event}_OUTCOME{o}_SCN{scn}_MAXREPS-'])
-                             for o in range(1, model_events_dict[model_event] + 1)])
-
-                        outcome_array_dict = outcome_arrays(model_event_out_weights, model_event_out_noreps,
-                                                            model_event_out_maxreps, model_event_monte_carlo_sims,
-                                                            model_event_depends_mask)
-
-                        for out in range(1, model_events_dict[model_event] + 1):
-                            event_outcome_records.append({
-                                'event_id': model_events_user_settings[f'-EVENT{model_event}_ID-'],
-                                'event': model_event,
-                                'outcome_id': model_events_user_settings[f'-EVENT{model_event}_OUTCOME{out}_ID-'],
-                                'outcome': out,
-                                'scenario': scn,
-                                'outcome_monte_carlo_sims': outcome_array_dict[out]
-                            })
-                        event_outcome_table = pd.DataFrame.from_records(event_outcome_records)
-                    model_events_list.remove(model_event)
-
-        # Quantity Scenarios Array
-        quantity_stream_records = []
-        for scn in range(0, n_scenarios + 1):
-            for grp in qs_group_dict:
-                group_monte_carlo_sims = monte_carlo_expression(
-                    f'-SCN{scn}_QG{grp}',
-                    values[f'-SCN{scn}_QG{grp}_MC_TYPE-'],
-                    n_simulations)
-                for lin in range(1, qs_group_dict[grp] + 1):
-                    quantity_stream_records.append({
-                        'scenario': scn,
-                        'group': grp,
-                        'group_id': values[f'-SCN{scn}_QG{grp}_ID-'],
-                        'type': values[f'-SCN{scn}_QG{grp}_GRP_TYPE-'],
-                        'line': lin,
-                        'line_id': values[f'-SCN{scn}_QG{grp}_LIN{lin}_ID-'],
-                        'prefix': f'-SCN{scn}_QG{grp}_LIN{lin}',
-                        'value': values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRICE-'],
-                        'stakeholder': values[f'-SCN{scn}_QG{grp}_LIN{lin}_STKE-'],
-                        'geography': values[f'-SCN{scn}_QG{grp}_LIN{lin}_GEOZN-'],
-                        'quantity_stream': expression_to_array(n_simulation_periods,
-                                                               values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRANGE-'],
-                                                               values[f'-SCN{scn}_QG{grp}_LIN{lin}_PQUANT-']),
-                        'line_monte_carlo_sims': monte_carlo_expression(
-                            f'-SCN{scn}_QG{grp}_LIN{lin}',
-                            values[f'-SCN{scn}_QG{grp}_LIN{lin}_MC_TYPE-'],
-                            n_simulations),
-                        'group_monte_carlo_sims': group_monte_carlo_sims,
-                        'outcome_id': values[f'-SCN{scn}_QG{grp}_LIN{lin}_DEPENDS-']
-                    })
-        quantity_stream_table = pd.DataFrame.from_records(quantity_stream_records)
-        # print(quantity_stream_table.to_string())
-        # Create column for the weighted monte carlo shifted quantity streams.
-        quantity_stream_table['monte_carlo_streams'] = (quantity_stream_table['line_monte_carlo_sims'] +
-                                                        quantity_stream_table['group_monte_carlo_sims'] - 1) * \
-                                                       quantity_stream_table['quantity_stream']
-
-        # Add the results of the outcome table to the quantity table.
         try:
-            quantity_stream_table = pd.merge(quantity_stream_table, event_outcome_table[['outcome_id', 'scenario',
-                                                                                         'outcome_monte_carlo_sims']],
-                                             how='left', on=['outcome_id', 'scenario'])
-        except ValueError:
-            quantity_stream_table['outcome_monte_carlo_sims'] = 1
+            # Prepare Random Number Generators and Simulation Counter
+            seed = int(values['-RES_SET_SEED-'])
+            random_generator = np.random.default_rng(seed)
+            n_simulations = int(values['-RES_NUM_SIMS-'])
+            split_pranges = [list(map(int, re.split(',|\n', values[key]))) for key in values if 'PRANGE-' in str(key)]
+            split_pranges_flat = [period for sublist in split_pranges for period in sublist]
+            # Get the maximum number of simulation periods from the Quantity Scenarios Tab
+            n_simulation_periods = np.amax(np.array(split_pranges_flat)) + 1
+            # Create a map of ones of the size of the total arrays to facilitate broadcasting to the right shape.
+            one_map = np.ones((n_simulations, n_simulation_periods))
 
-        # Create column for the combined event and stream quantities.
-        quantity_stream_table['combined_stream_quantity_events'] = quantity_stream_table['monte_carlo_streams'] * \
-                                                                   quantity_stream_table['outcome_monte_carlo_sims']
+            # Function events
+            function_dict = {}
+            if n_functions > 0:
+                for f in range(1, n_functions+1):
+                    # Add function names to a list so that other functions can check.
+                    function_names.append(values[f'-FNC{f}_ID-'])
 
-        # Merge the values table with the quantity streams table.
-        quantity_stream_table = pd.merge(quantity_stream_table, reference_price_monte_carlo_table[['value',
-                                                                                                   'monte_carlo_values']],
-                                         how='left', on='value')
+                    # Assign functions to a dictionary to be called.
+                    function_dict[values[f'-FNC{f}_ID-']] = assign_function(f)
 
-        # Calculate nominal and discounted value streams.
-        quantity_stream_table['nominal_quantity_value_stream'] = quantity_stream_table[
-                                                                     'combined_stream_quantity_events'] * \
-                                                                 quantity_stream_table['monte_carlo_values']
+            # Parameters Dictionary
+            parameter_dict = {}
+            parameter_dict['t'] = {}
+            parameter_dict['t']['expression'] = np.linspace(0, n_simulation_periods - 1, num=n_simulation_periods)*one_map
+            if n_params > 0:
+                parameter_checklist = []
+                for par in range(1, n_params + 1):
+                    parameter_checklist.append(values[f'-PAR{par}_ID-'])
+                for par in range(1, n_params+1):
+                    parameter_dict[f'{values[f"-PAR{par}_ID-"]}'] = {}
+                    parameter_dict[f'{values[f"-PAR{par}_ID-"]}']['index'] = par
+                    parameter_dict[f'{values[f"-PAR{par}_ID-"]}']['expression'] = 'EMPTY'
 
-        quantity_stream_table[
-            'discounted_quantity_value_stream'] = quantity_stream_table.nominal_quantity_value_stream.apply(
-            lambda x: x * dr_monte_carlo_array)
+                while len(parameter_checklist) > 0:
+                    for par in parameter_checklist:
+                        # Check to see if the parameter has any dependencies that have not been calculated yet.
+                        if parameter_dict[f'{par}']['expression'] == 'EMPTY':
+                            par_skip_flag = False
+                            p_n = parameter_dict[par]['index']
+                            par_deps_list = re.findall(r'[a-zA-Z^]+', values[f'-PAR{p_n}_PVALUE-'])
+                            par_deps_list = [m for m in par_deps_list if m not in math_expressions]
+                            par_deps_list = [m for m in par_deps_list if m not in function_names]
+                            if 'None' in par_deps_list:
+                                par_deps_list.remove('None')
+                            for par_dep in par_deps_list:
+                                if parameter_dict[f'{par_dep}']['expression'] == 'EMPTY':
+                                    par_skip_flag = True
+                                    break
+                            if par_skip_flag is not True:
+                                par_num = parameter_dict[f'{par}']['index']
+                                parameter_dict[f'{par}']['expression'] = expression_to_array(
+                                    n_simulation_periods,
+                                    values[f'-PAR{par_num}_PRANGE-'],
+                                    values[f'-PAR{par_num}_PVALUE-'])
+                                # Broadcast Monte Carlo random noise array over the expression array.
+                                par_monte_carlo_sims = monte_carlo_expression(
+                                    f'-PAR{par_num}',
+                                    values[f'-PAR{par_num}_MC_TYPE-'],
+                                    n_simulations)
+                                parameter_dict[f'{par}']['expression'] = parameter_dict[f'{par}']['expression']*par_monte_carlo_sims
+                                parameter_checklist.remove(par)
+                                np.savetxt(f"D:/Local Account/Documents/Graduate Diploma/MASTERS DISSERTAATION/BUS505/Parameters/{par}.csv", parameter_dict[f'{par}']['expression'], delimiter=',')
 
-        # Calculate nominal and discounted total value at points.
-        quantity_stream_table['nominal_total_value'] = quantity_stream_table.nominal_quantity_value_stream.apply(
-            lambda x: np.sum(x, axis=1))
-        quantity_stream_table['discounted_total_value'] = quantity_stream_table.discounted_quantity_value_stream.apply(
-            lambda x: np.sum(x, axis=1))
-        quantity_stream_table['nominal_total_value_mean'] = quantity_stream_table.nominal_total_value.apply(
-            lambda x: np.average(x))
-        quantity_stream_table['discounted_total_value_mean'] = quantity_stream_table.discounted_total_value.apply(
-            lambda x: np.average(x))
-        quantity_stream_table['discounted_total_value_perc'] = quantity_stream_table.discounted_total_value.apply(
-            lambda x: np.percentile(x, [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95], method='linear'))
-        for perc in [(0, 5), (1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60), (7, 70), (8, 80), (9, 90), (10, 95)]:
+            # Discount Rate Array
+            if values['-DR_TYPE-'] == 'Constant':
+                dr_base_array = np.full((1, n_simulation_periods), float(values['-DR_MAIN-']) / 100)
+            elif values['-DR_TYPE-'] == 'Stepped':
+                step_ranges_list = values['-DR_STEP_RANGE-'].split('\n')
+                step_rates_list = values['-DR_STEP_RATE-'].split('\n')
+                n_steps = len(step_ranges_list)
+                dr_base_array = np.zeros(n_simulation_periods)
+                end = 0
+                for step in range(0, n_steps):
+                    start, end = map(int, step_ranges_list[step].split(','))
+                    end += 1
+                    dr_base_array[start:end] = float(step_rates_list[step]) / 100
+                if end <= n_simulation_periods:
+                    dr_base_array[end:n_simulation_periods] = float(values['-DR_STEP_BASE-']) / 100
+            elif values['-DR_TYPE-'] == 'Gamma time declining':
+                mu = float(values['-DR_MAIN-']) / 100
+                sig = float(values['-DR_SIG-']) / 100
+                dr_base_array = np.array([(mu / (1 + ((t - 1) * sig ** 2) / mu)) for t in range(0, n_simulation_periods)])
+            dr_base_array[0][0] = 0
+            dr_base_array = np.tile(dr_base_array, (n_simulations, 1))
+            dr_monte_carlo_factors = monte_carlo_expression('-DR', values['-DR_MC_TYPE-'], n_simulations)
+            # Produce a 2d array where rows=simulation and columns=time.
+            # Note that if dr_monte_carlo_factors is a single column array then the function should broadcast.
+            dr_monte_carlo_array = np.cumprod(1 / (1 + dr_monte_carlo_factors * dr_base_array), axis=1)
+
+            # Prices Array
+            reference_price_monte_carlo_table = []
+            #print(pr_group_dict)
+            for grp in pr_group_dict:
+                # Column matrix for simulations.
+                group_monte_carlo_sims = monte_carlo_expression(
+                    f'-PG{grp}',
+                    values[f'-PG{grp}_MC_TYPE-'],
+                    n_simulations)
+
+                for lin in range(1, pr_group_dict[grp] + 1):
+                    reference_price_monte_carlo_table.append({
+                        'group': grp,
+                        'line': lin,
+                        'value': values[f'-PG{grp}_LIN{lin}_ID-'],
+                        'prefix': f'-PG{grp}_LIN{lin}',
+                        'real_adj_value': expression_to_array(n_simulation_periods, f'0,{n_simulation_periods-1}',
+                                                              str(MC_holding_dict[f'-PG{grp}_LIN{lin}_RAV_FULL-'])),
+                        'line_monte_carlo_sims': monte_carlo_expression(
+                            f'-PG{grp}_LIN{lin}',
+                            values[f'-PG{grp}_LIN{lin}_MC_TYPE-'],
+                            n_simulations
+                        ),
+                        'group_monte_carlo_sims': group_monte_carlo_sims
+                    })
+            reference_price_monte_carlo_table = pd.DataFrame.from_records(reference_price_monte_carlo_table)
+
+            # Create Column matrix for the weighted monte carlo-shifted values.
+            reference_price_monte_carlo_table['monte_carlo_values'] = (reference_price_monte_carlo_table[
+                                                                           'line_monte_carlo_sims'] +
+                                                                       reference_price_monte_carlo_table[
+                                                                           'group_monte_carlo_sims'] - 1) * \
+                                                                      reference_price_monte_carlo_table['real_adj_value']
+
+            # Event Outcomes Array
+            # Convert shorthands to appropriate data.
+            for scn in range(0, n_scenarios + 1):
+                for model_event in range(1, len(model_events_dict) + 1):
+                    for outs in range(1, model_events_dict[model_event] + 1):
+                        for suffix in ['RANGE', 'WEIGHT', 'NOREPS', 'MAXREPS']:
+                            if model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_{suffix}-'] == '<<<':
+                                model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_{suffix}-'] = \
+                                    model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{0}_{suffix}-']
+                        if model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_MAXREPS-'] == 'None':
+                            model_events_user_settings[f'-EVENT{model_event}_OUTCOME{outs}_SCN{scn}_MAXREPS-'] = '-1'
+
+            event_outcome_records = []
+            # Inlcude a 'none' record for where there are no dependent events.
+            for scn in range(0, n_scenarios + 1):
+                event_outcome_records.append({
+                    'event_id': 'None',
+                    'event': 'None',
+                    'outcome_id': 'None',
+                    'outcome': 'None',
+                    'scenario': scn,
+                    'outcome_monte_carlo_sims': np.full((n_simulations, n_simulation_periods), True)
+                })
+
+            model_events_list = list(model_events_dict.keys())
+            if len(model_events_list) == 0:
+                event_outcome_table = pd.DataFrame.from_records(event_outcome_records)
+            else:
+                event_outcome_table = pd.DataFrame({
+                    'event_id': ['blank'],
+                    'event': ['blank'],
+                    'outcome_id': ['blank'],
+                    'scenario': ['blank'],
+                    'outcome_monte_carlo_sims': ['blank']
+                })
+            #print(uniform.rvs(size=(1), random_state=random_generator))
+            while len(model_events_list) > 0:
+                for model_event in model_events_list:
+                    depends_list = model_events_user_settings[f'-EVENT{model_event}_DEPENDS-']
+                    if all(depend in event_outcome_table['outcome_id'].tolist() for depend in depends_list):
+                        model_event_monte_carlo_sims = uniform.rvs(size=(n_simulations, n_simulation_periods),
+                                                                   random_state=random_generator)
+                        for scn in range(0, n_scenarios + 1):
+
+                            # Filter the table for the outcomes and scenarios needed, prepare the dependency mask.
+                            if not depends_list:
+                                model_event_depends_mask = np.ones((n_simulations, n_simulation_periods), dtype=int)
+                            else:
+                                depends_stack = \
+                                    event_outcome_table.loc[(event_outcome_table['outcome_id'].isin(depends_list)) &
+                                                            (event_outcome_table['scenario'] == scn)][
+                                        'outcome_monte_carlo_sims'].tolist()
+                                depends_stack.append((np.full((n_simulations, n_simulation_periods), True)))
+                                model_event_depends_mask = np.prod(depends_stack, axis=0)
+
+                            model_event_out_weights = np.stack([np.array(expression_to_array(n_simulation_periods,
+                                                                                             model_events_user_settings[
+                                                                                                 f'-EVENT{model_event}_OUTCOME{o}_SCN{scn}_RANGE-'],
+                                                                                             model_events_user_settings[
+                                                                                                 f'-EVENT{model_event}_OUTCOME{o}_SCN{scn}_WEIGHT-']))
+                                                                for o in range(1, model_events_dict[model_event] + 1)])
+
+                            model_event_out_noreps = np.stack(
+                                [int(model_events_user_settings[f'-EVENT{model_event}_OUTCOME{o}_SCN{scn}_NOREPS-'])
+                                 for o in range(1, model_events_dict[model_event] + 1)])
+
+                            model_event_out_maxreps = np.stack(
+                                [int(model_events_user_settings[f'-EVENT{model_event}_OUTCOME{o}_SCN{scn}_MAXREPS-'])
+                                 for o in range(1, model_events_dict[model_event] + 1)])
+
+                            outcome_array_dict = outcome_arrays(model_event_out_weights, model_event_out_noreps,
+                                                                model_event_out_maxreps, model_event_monte_carlo_sims,
+                                                                model_event_depends_mask)
+
+                            for out in range(1, model_events_dict[model_event] + 1):
+                                event_outcome_records.append({
+                                    'event_id': model_events_user_settings[f'-EVENT{model_event}_ID-'],
+                                    'event': model_event,
+                                    'outcome_id': model_events_user_settings[f'-EVENT{model_event}_OUTCOME{out}_ID-'],
+                                    'outcome': out,
+                                    'scenario': scn,
+                                    'outcome_monte_carlo_sims': outcome_array_dict[out]
+                                })
+                            event_outcome_table = pd.DataFrame.from_records(event_outcome_records)
+                        model_events_list.remove(model_event)
+
+            # Quantity Scenarios Array
+            quantity_stream_records = []
+            for scn in range(0, n_scenarios + 1):
+                for grp in qs_group_dict:
+                    group_monte_carlo_sims = monte_carlo_expression(
+                        f'-SCN{scn}_QG{grp}',
+                        values[f'-SCN{scn}_QG{grp}_MC_TYPE-'],
+                        n_simulations)
+                    for lin in range(1, qs_group_dict[grp] + 1):
+                        quantity_stream_records.append({
+                            'scenario': scn,
+                            'group': grp,
+                            'group_id': values[f'-SCN{scn}_QG{grp}_ID-'],
+                            'type': values[f'-SCN{scn}_QG{grp}_GRP_TYPE-'],
+                            'line': lin,
+                            'line_id': values[f'-SCN{scn}_QG{grp}_LIN{lin}_ID-'],
+                            'prefix': f'-SCN{scn}_QG{grp}_LIN{lin}',
+                            'value': values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRICE-'],
+                            'stakeholder': values[f'-SCN{scn}_QG{grp}_LIN{lin}_STKE-'],
+                            'geography': values[f'-SCN{scn}_QG{grp}_LIN{lin}_GEOZN-'],
+                            'quantity_stream': expression_to_array(n_simulation_periods,
+                                                                   values[f'-SCN{scn}_QG{grp}_LIN{lin}_PRANGE-'],
+                                                                   values[f'-SCN{scn}_QG{grp}_LIN{lin}_PQUANT-']),
+                            'line_monte_carlo_sims': monte_carlo_expression(
+                                f'-SCN{scn}_QG{grp}_LIN{lin}',
+                                values[f'-SCN{scn}_QG{grp}_LIN{lin}_MC_TYPE-'],
+                                n_simulations),
+                            'group_monte_carlo_sims': group_monte_carlo_sims,
+                            'outcome_id': values[f'-SCN{scn}_QG{grp}_LIN{lin}_DEPENDS-']
+                        })
+            quantity_stream_table = pd.DataFrame.from_records(quantity_stream_records)
+            # print(quantity_stream_table.to_string())
+            # Create column for the weighted monte carlo shifted quantity streams.
+            quantity_stream_table['monte_carlo_streams'] = (quantity_stream_table['line_monte_carlo_sims'] +
+                                                            quantity_stream_table['group_monte_carlo_sims'] - 1) * \
+                                                           quantity_stream_table['quantity_stream']
+
+            # Add the results of the outcome table to the quantity table.
+            try:
+                quantity_stream_table = pd.merge(quantity_stream_table, event_outcome_table[['outcome_id', 'scenario',
+                                                                                             'outcome_monte_carlo_sims']],
+                                                 how='left', on=['outcome_id', 'scenario'])
+            except ValueError:
+                quantity_stream_table['outcome_monte_carlo_sims'] = 1
+
+            # Create column for the combined event and stream quantities.
+            quantity_stream_table['combined_stream_quantity_events'] = quantity_stream_table['monte_carlo_streams'] * \
+                                                                       quantity_stream_table['outcome_monte_carlo_sims']
+
+            # Merge the values table with the quantity streams table.
+            quantity_stream_table = pd.merge(quantity_stream_table, reference_price_monte_carlo_table[['value',
+                                                                                                       'monte_carlo_values']],
+                                             how='left', on='value')
+
+            # Calculate nominal and discounted value streams.
+            quantity_stream_table['nominal_quantity_value_stream'] = quantity_stream_table[
+                                                                         'combined_stream_quantity_events'] * \
+                                                                     quantity_stream_table['monte_carlo_values']
+
             quantity_stream_table[
-                f'discounted_total_value_P{perc[1]}'] = quantity_stream_table.discounted_total_value_perc.apply(
-                lambda x: x[perc[0]]
+                'discounted_quantity_value_stream'] = quantity_stream_table.nominal_quantity_value_stream.apply(
+                lambda x: x * dr_monte_carlo_array)
+
+            # Calculate nominal and discounted total value at points.
+            quantity_stream_table['nominal_total_value'] = quantity_stream_table.nominal_quantity_value_stream.apply(
+                lambda x: np.sum(x, axis=1))
+            quantity_stream_table['discounted_total_value'] = quantity_stream_table.discounted_quantity_value_stream.apply(
+                lambda x: np.sum(x, axis=1))
+            quantity_stream_table['nominal_total_value_mean'] = quantity_stream_table.nominal_total_value.apply(
+                lambda x: np.average(x))
+            quantity_stream_table['discounted_total_value_mean'] = quantity_stream_table.discounted_total_value.apply(
+                lambda x: np.average(x))
+            quantity_stream_table['discounted_total_value_perc'] = quantity_stream_table.discounted_total_value.apply(
+                lambda x: np.percentile(x, [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95], method='linear'))
+            for perc in [(0, 5), (1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60), (7, 70), (8, 80), (9, 90), (10, 95)]:
+                quantity_stream_table[
+                    f'discounted_total_value_P{perc[1]}'] = quantity_stream_table.discounted_total_value_perc.apply(
+                    lambda x: x[perc[0]]
+                )
+
+            # Attatch the DA_table weights to the table.
+            DA_frame = pd.DataFrame({'stakeholder': [''], 'geography': [''], 'weight': [1]})
+            if len(DA_table) > 0:
+                DA_table[0][0] = 'stakeholder'
+                DA_frame_items = pd.DataFrame(DA_table[1:], columns=DA_table[0])
+                DA_frame_items = pd.melt(DA_frame_items, id_vars='stakeholder', value_vars=DA_table[0][1:],
+                                         value_name='weight',
+                                         var_name='geography')
+                DA_frame = pd.concat([DA_frame, DA_frame_items])
+            quantity_stream_table = pd.merge(quantity_stream_table, DA_frame, how='left', on=['stakeholder', 'geography'])
+            # print(quantity_stream_table.to_string())
+            run_number += 1
+            result_windows[run_number] = result_popup(run_number)
+            plot_histo_cdf(run_number,
+                           0,
+                           run_cba_settings[run_number]['use_weights'],
+                           run_cba_settings[run_number]['net_z'],
+                           run_cba_settings[run_number]['distr_segs'])
+
+        except Exception as issue:
+            print("A problem occurred with the inputs!")
+            sg.popup(
+                f'Here is the error that was raised:\n{type(issue)}: {issue}',
+                title="Whoops! An error occurred!"
             )
-
-        # Attatch the DA_table weights to the table.
-        DA_frame = pd.DataFrame({'stakeholder': [''], 'geography': [''], 'weight': [1]})
-        if len(DA_table) > 0:
-            DA_table[0][0] = 'stakeholder'
-            DA_frame_items = pd.DataFrame(DA_table[1:], columns=DA_table[0])
-            DA_frame_items = pd.melt(DA_frame_items, id_vars='stakeholder', value_vars=DA_table[0][1:],
-                                     value_name='weight',
-                                     var_name='geography')
-            DA_frame = pd.concat([DA_frame, DA_frame_items])
-        quantity_stream_table = pd.merge(quantity_stream_table, DA_frame, how='left', on=['stakeholder', 'geography'])
-        # print(quantity_stream_table.to_string())
-        run_number += 1
-        result_windows[run_number] = result_popup(run_number)
-        plot_histo_cdf(run_number,
-                       0,
-                       run_cba_settings[run_number]['use_weights'],
-                       run_cba_settings[run_number]['net_z'],
-                       run_cba_settings[run_number]['distr_segs'])
-
-    if run_number > 0:
-        for run in range(1, run_number + 1):
-            if result_windows[run] is not None:
-                loop_result_window_events(run)
+    try:
+        if run_number > 0:
+            for run in range(1, run_number + 1):
+                if result_windows[run] is not None:
+                    loop_result_window_events(run)
+    except Exception as result_display_issue:
+        print("A problem occurred with displaying the results!")
+        sg.popup(
+            f'Here is the error that was raised:\n{type(result_display_issue)}: {result_display_issue}',
+            title="Whoops! An error occurred!"
+        )
 
     if event == sg.WIN_CLOSED:
         break
