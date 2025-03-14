@@ -1,0 +1,1018 @@
+{
+  "monte_carlo_settings": {
+    "seed": 438167,
+    "n_simulations": 50000
+  },
+  "discount_rate_settings": {
+    "discounting_method": "Constant",
+    "discount_rate": 5
+  },
+  "distribution_analysis_settings": {
+    "population_average_income": 1069,
+    "income_weighting_parameter": 1.61,
+    "subgroup_average_income": [
+      ["", "Western Sydney", "All NSW"],
+      ["Government", 1069, 1069],
+      ["Business", 1413, 1413],
+      ["Residents", 919, 1069],
+      ["AboriginalHH", 1077, 1077]
+    ]
+  },
+  "parameters": {
+    "parameter_1": {
+      "ID": "capcost",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "1608"
+      ],
+      "MC_PDF": "PERT",
+      "PDF_min": 1.0,
+      "PDF_mode": 1.49,
+      "PDF_max": 9.25,
+      "PDF_rand_each_t": false,
+      "comments": "EIS Table 4.9. Noting that $1.61 billion relates to P50 costs, discounted over several years. Includes design and construction, project management, insurance, environmental controls, stakeholder engagement, legal and regulatory requirements, and contingency allowances. Does not include any environmental offset costs. Uncertainty intervals parametised from Petheram, C., & McMahon, T. A. (2019). Dams, dam costs and damnable cost overruns. Journal of Hydrology X, 3, 100026. https://doi.org/10.1016/j.hydroa.2019.100026."
+    },
+    "parameter_2": {
+      "ID": "om",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "capcost*0.0021"
+      ],
+      "MC_PDF": "Triangular",
+      "PDF_min": 0.38,
+      "PDF_max": 4.10,
+      "PDF_mode": 1.0,
+      "PDF_rand_each_t": false,
+      "comments": "Uncertainty interval parametised from Petheram, C., & McMahon, T. A. (2019). Dams, dam costs and damnable cost overruns. Journal of Hydrology X, 3, 100026. https://doi.org/10.1016/j.hydroa.2019.100026."
+    },
+    "parameter_3": {
+      "ID": "fld",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "1"
+      ],
+      "MC_PDF": "Uniform",
+      "PDF_min": 0,
+      "PDF_max": 1,
+      "PDF_rand_each_t": true,
+      "comments": "Randomly generated probability points for flood severity percentile."
+    },
+    "parameter_4": {
+      "ID": "hhBC",
+      "period_range": [
+        "0,17",
+        "18,34"
+      ],
+      "value": [
+        "(FhhBC(fld)*(23-(t+6))+FhhBCend(fld)*(t+6))/23",
+        "FhhBCend(fld)"
+      ],
+      "MC_PDF": "None",
+      "comments": "Number of houses impacted in the base case. Taking the weighted average of houses impacted in 2018 to 2040."
+    },
+    "parameter_5": {
+      "ID": "hhWD",
+      "period_range": [
+        "0,4",
+        "5,17",
+        "18,34"
+      ],
+      "value": [
+        "hhBC",
+        "(FhhWD(fld)*(23-(t+6))+FhhWDend(fld)*(t+6))/23",
+        "FhhWDend(fld)"
+      ],
+      "MC_PDF": "None",
+      "comments": "Number of houses impacted in the project case. Taking the weighted average of houses impacted in 2018 to 2040."
+    },
+    "parameter_6": {
+      "ID": "hhDamageBC",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "FhhDamage(hhBC)"
+      ],
+      "MC_PDF": "None",
+      "comments": "Structural, contents, cleaning and relocation costs in the base case."
+    },
+    "parameter_7": {
+      "ID": "hhDamageWD",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "FhhDamage(hhWD)"
+      ],
+      "MC_PDF": "None",
+      "comments": "Structural, contents, cleaning and relocation costs in the project case."
+    },
+    "parameter_8": {
+      "ID": "ccFactorC",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "0.026"
+      ],
+      "MC_PDF": "None",
+      "comments": "Annual increase in flood risk weight per year after 2023 to 2030 taking into account current climate change projections."
+    },
+    "parameter_9": {
+      "ID": "ccFactorF",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "0.012"
+      ],
+      "MC_PDF": "Uniform",
+      "PDF_min": 0.43,
+      "PDF_max": 1.72,
+      "PDF_rand_each_t": false,
+      "comments": "Annual increase in flood risk weight per year after 2030 taking into account future climate change projections."
+    },
+    "parameter_10": {
+      "ID": "DeathsBC",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "clip(0.0021*hhBC-1.6187, 0, inf)"
+      ],
+      "MC_PDF": "None",
+      "comments": "Number of lives lost as a function of the flood severity in the Base Case. Note - transfer this directly to the quantity scenario section."
+    },
+    "parameter_11": {
+      "ID": "DeathsWD",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "clip(0.0021*hhWD-1.6187, 0, inf)"
+      ],
+      "MC_PDF": "None",
+      "comments": "Number of lives lost as a function of the flood severity, in the Project Case, see equation 1 in flood risk management measures, assuming HR=0.3. Note - transfer this directly to the quantity scenario section.."
+    },
+    "parameter_12": {
+      "ID": "Evacuations",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        "0"
+      ],
+      "MC_PDF": "None",
+      "comments": "Annual increase in flood risk weight per year after 2030 taking into account future climate change projections."
+    },
+    "parameter_13": {
+      "ID": "ecoOffsetsLn",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        20.132
+      ],
+      "MC_PDF": "Truncated normal",
+      "PDF_mean": 1.0,
+      "PDF_stdev": 0.0175,
+      "PDF_rand_each_t": false,
+      "comments": "Natural lograithm of the costs of ecosystem offsets required for the Dam Project. Value in $."
+    },
+    "parameter_14": {
+      "ID": "floraOffsetsLn",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        18.465
+      ],
+      "MC_PDF": "Truncated normal",
+      "PDF_mean": 1.0,
+      "PDF_stdev": 0.0222,
+      "PDF_rand_each_t": false,
+      "comments": "Natural lograithm of the costs of flora species offsets required for the Dam Project. Value in $."
+    },
+    "parameter_15": {
+      "ID": "faunaOffsets",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        743.823
+      ],
+      "MC_PDF": "Truncated normal",
+      "PDF_stdev": 0.314,
+      "PDF_mean": 1.0,
+      "PDF_rand_each_t": false,
+      "comments": "Costs of fauna species offsets required for the Dam Project. Value in $m."
+    },
+    "parameter_16": {
+      "ID": "economicLife",
+      "period_range": [
+        "0,34"
+      ],
+      "value": [
+        125
+      ],
+      "MC_PDF": "Triangular",
+      "PDF_mode": 1,
+      "PDF_min": 0.8,
+      "PDF_max": 1.2,
+      "PDF_rand_each_t": false,
+      "comments": "Useful economic life probablistically determined to between 100 and 150 years."
+    }
+  },
+  "functions": {
+    "function_1": {
+      "ID": "FhhBC",
+      "interpolation_method": "Linear",
+      "x_values": [0, 0.5, 0.75, 0.9, 0.95, 0.975, 0.99, 0.995, 0.998, 0.999, 1.0],
+      "y_values": [730, 1670, 2500, 4800, 7600, 10000, 15500, 19600, 23600, 26200, 36700],
+      "comments": "Total number of houses impacted in the base case as a function of the flood severity. At year 2018"
+    },
+    "function_2": {
+      "ID": "FhhWD",
+      "interpolation_method": "Linear",
+      "x_values": [0, 0.5, 0.75, 0.9, 0.95, 0.975, 0.99, 0.995, 0.998, 0.999, 1.0],
+      "y_values": [370, 820, 1480, 1980, 2420, 3500, 5900, 9600, 15100, 20100, 32800],
+      "comments": "Total number of houses impacted in the project case as a function of the flood severity. At Year 2018"
+    },
+    "function_3": {
+      "ID": "FhhBCend",
+      "interpolation_method": "Linear",
+      "x_values": [0, 0.5, 0.75, 0.9, 0.95, 0.975, 0.99, 0.995, 0.998, 0.999, 1.0],
+      "y_values": [730, 1670, 2500, 4800, 7600, 10313, 18125, 25625, 34375, 39375, 60000],
+      "comments": "Total number of houses impacted in the base case as a function of the flood severity. At year 2040"
+    },
+    "function_4": {
+      "ID": "FhhWDend",
+      "interpolation_method": "Linear",
+      "x_values": [0, 0.5, 0.75, 0.9, 0.95, 0.975, 0.99, 0.995, 0.998, 0.999, 1.0],
+      "y_values": [370, 820, 1480, 1980, 2420, 3500, 5900, 10625, 19375, 26250, 53125],
+      "comments": "Total number of houses impacted in the project case as a function of the flood severity. At Year 2040"
+    },
+    "function_5": {
+      "ID": "FhhDamage",
+      "interpolation_method": "Linear",
+      "x_values": [0, 730, 1670, 2500, 4800, 7600, 10000, 15500, 19600, 23600, 26200, 36700, 60000],
+      "y_values": [0, 88.5, 220.8, 404.2, 1073.8, 1876.0, 2680.2, 4097.2, 5546.3, 7432.6, 9369.1, 15531.8, 29207.5],
+      "comments": "Relationship between houses impacted (x) and total structural, contents, cleanup and relocation costs (y, $millions) derived from flood depths and damage functions in GIS."
+    },
+    "function_6": {
+      "ID": "FcomDamage",
+      "interpolation_method": "Linear",
+      "x_values": [0, 88.5, 220.8, 404.2, 1073.8, 1876.0, 2680.2, 4097.2, 5546.3, 7432.6, 9369.1, 15531.8, 29207.5],
+      "y_values": [0, 0.4, 1.4, 22.5, 254.8, 623.6, 892.7, 1560.8, 2021.8, 2896.7, 3554.6, 4882.7, 7829.7],
+      "comments": "Relationship between dwelling costs (x, $millions) and total commercial costs (y, $millions) derived from flood depths and damage functions in GIS."
+    },
+    "function_7": {
+      "ID": "FpubDamage",
+      "interpolation_method": "Linear",
+      "x_values": [0, 88.5, 220.8, 404.2, 1073.8, 1876.0, 2680.2, 4097.2, 5546.3, 7432.6, 9369.1, 15531.8, 29207.5],
+      "y_values": [0, 11.5, 47.0, 85.1, 116.0, 163.5, 237.6, 356.6, 443.1, 543.0, 622.2, 833.9, 1303.7],
+      "comments": "Relationship between dwelling costs (x, $millions) and total public building costs (y, $millions) derived from flood depths and damage functions in GIS."
+    },
+    "function_8": {
+      "ID": "FrdDamage",
+      "interpolation_method": "Linear",
+      "x_values": [0, 88.5, 220.8, 404.2, 1073.8, 1876.0, 2680.2, 4097.2, 5546.3, 7432.6, 9369.1, 15531.8, 29207.5],
+      "y_values": [0, 6.7, 11.6, 16.4, 26.8, 34.5, 40.6, 51.0, 58.9, 67.9, 75.8, 101.0, 156.9],
+      "comments": "Relationship between dwelling costs (x, $millions) and road damage costs (y, $millions) derived from flood depths and damage functions in GIS."
+    },
+    "function_9": {
+      "ID": "FlossLife",
+      "interpolation_method": "Linear",
+      "x_values": [0, 1934, 14086, 60000],
+      "y_values": [0, 0, 101, 2057],
+      "comments": "Relationship between the number of dwellings impacted and the number of lives lost."
+    }
+  },
+  "reference_prices": {
+    "country": "Australia",
+    "year": 2023,
+    "currency_conversion_range": "5 years",
+    "currency_conversion_measure": "Mean",
+    "price_group_1": {
+      "ID": "Financial Costs",
+      "MC_PDF": "None",
+      "price_line_1": {
+        "ID": "Construction",
+        "units": "Annual",
+        "nominal_value": "capcost",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1.28,
+        "MC_PDF": "None",
+        "comments": "Updated to 2023 values by Other heavy and civil engineering construction PPI."
+      },
+      "price_line_2": {
+        "ID": "Ops and Maintenance",
+        "units": "Annual",
+        "nominal_value": "om",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1.28,
+        "MC_PDF": "None",
+        "comments": "Updated to 2023 values by Other heavy and civil engineering construction PPI."
+      },
+      "price_line_3": {
+        "ID": "NR WS Upgrade",
+        "units": "One off",
+        "nominal_value": 12,
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1.28,
+        "MC_PDF": "None",
+        "comments": "Updated to 2023 values by Other heavy and civil engineering construction PPI."
+      }
+    },
+    "price_group_2": {
+      "ID": "Flood Damage Costs",
+      "MC_PDF": "None",
+      "price_line_1": {
+        "ID": "Direct Residential Damage. BC",
+        "units": "House",
+        "nominal_value": "FhhDamage(hhBC)",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Average total residential costs. Base Case"
+      },
+      "price_line_2": {
+        "ID": "Direct Residential Damage. WD",
+        "units": "House",
+        "nominal_value": "FhhDamage(hhWD)",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Average total residential costs. Project case."
+      },
+      "price_line_3": {
+        "ID": "Direct Commercial Damage. BC",
+        "units": "House",
+        "nominal_value": "FcomDamage(FhhDamage(hhBC))",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Direct commercial damage as a function of residential damage. Base case."
+      },
+      "price_line_4": {
+        "ID": "Indirect Commercial Damage. BC",
+        "units": "House",
+        "nominal_value": "FcomDamage(FhhDamage(hhBC))*(0.18+0.1)",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Indirect commercial damages are 18% and 10% of direct commercial costs for loss of trading and clean-up respectively."
+      },
+      "price_line_5": {
+        "ID": "Direct Commercial Damage. WD",
+        "units": "House",
+        "nominal_value": "FcomDamage(FhhDamage(hhWD))",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Direct commercial damage as a function of residential damage. Project case."
+      },
+      "price_line_6": {
+        "ID": "Indirect Commercial Damage. WD",
+        "units": "House",
+        "nominal_value": "FcomDamage(FhhDamage(hhWD))*(0.18+0.1)",
+        "currency": "AUS",
+        "value_year": 2015,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Indirect commercial damages are 18% and 10% of direct commercial costs for loss of trading and clean-up respectively."
+      },
+      "price_line_7": {
+        "ID": "Electrical Damage",
+        "units": "House",
+        "nominal_value": 0.021,
+        "currency": "AUS",
+        "value_year": 2015,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Electrical infrastructure damage is 4.5% of direct residential damage."
+      },
+      "price_line_8": {
+        "ID": "Other Infrastructure Damage",
+        "units": "House",
+        "nominal_value": 0.166,
+        "currency": "AUS",
+        "value_year": 2015,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Other infrastructure damage is 35.3% of direct residential damage."
+      },
+      "price_line_9": {
+        "ID": "VSL",
+        "units": "Death",
+        "nominal_value": 7.752,
+        "currency": "AUS",
+        "value_year": 2019,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Value of a Statistical Life ($m). Table 19 of Flood Risk Management Measures."
+      },
+      "price_line_10": {
+        "ID": "Injury",
+        "units": "Injury",
+        "nominal_value": 0.077427,
+        "currency": "AUS",
+        "value_year": 2019,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Value per injury ($m). Table 19 of Flood Risk Management Measures."
+      },
+      "price_line_11": {
+        "ID": "AboriginalCulture",
+        "units": "HH",
+        "nominal_value": "0.000389*2.60",
+        "currency": "AUS",
+        "value_year": 2010,
+        "adjustment_factor": 1,
+        "MC_PDF": "Triangular",
+        "PDF_min": 0.44,
+        "PDF_max": 3.41,
+        "PDF_mode": 1,
+        "rand_each_t": false,
+        "comments": "Welfare change ($m/year) from waterholes of OK quality to Poor Quality. Zander, K. K., & Straton, A. (2010). An economic assessment of the value of tropical river ecosystem services: Heterogeneous preferences among Aboriginal and non-Aboriginal Australians. Ecological Economics, 69(12), 2417–2426. https://doi.org/10.1016/j.ecolecon.2010.07.010."
+      },
+      "price_line_12": {
+        "ID": "Unit Cost",
+        "units": "HH",
+        "nominal_value": 1,
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Dollar Unit."
+      }
+    },
+    "price_group_3": {
+      "ID": "Ecosystem Offsets",
+      "MC_PDF": "None",
+      "price_line_1": {
+        "ID": "ecoOffsetsTC",
+        "units": "Total",
+        "nominal_value": "exp(ecoOffsetsLn)/1000000",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Total Value of ecosystem offsets ($m)."
+      },
+      "price_line_2": {
+        "ID": "floraOffsetsTC",
+        "units": "Total",
+        "nominal_value": "exp(floraOffsetsLn)/1000000",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Total Value of flora species credit offsets ($m)."
+      },
+      "price_line_3": {
+        "ID": "faunaOffsetsTC",
+        "units": "Total",
+        "nominal_value": "faunaOffsets",
+        "currency": "AUS",
+        "value_year": 2023,
+        "adjustment_factor": 1,
+        "MC_PDF": "None",
+        "comments": "Total Value of fauna species credit offsets ($m)."
+      }
+    }
+  },
+  "event_model": {
+    "event_1": {
+      "ID": "Flood",
+      "outcome_1": {
+        "ID": "Flood Occurs",
+        "scenario_0": {
+          "period_range": ["0,7", "8,34"],
+          "outcome_weight": ["1.14+t*ccFactorC", "1.32+(t-8)*ccFactorF"],
+          "periods_without_repeat": 0,
+          "max_repeats": "None"
+        },
+        "scenario_1": {
+          "period_range": ["<<<"],
+          "outcome_weight": ["<<<"],
+          "periods_without_repeat": "<<<",
+          "max_repeats": "<<<"
+        }
+      },
+      "outcome_2": {
+        "ID": "No Flood",
+        "scenario_0": {
+          "period_range": ["0,7", "8,34"],
+          "outcome_weight": ["5-1.14+t*ccFactorC", "5-1.32+(t-8)*ccFactorF"],
+          "periods_without_repeat": 0,
+          "max_repeats": "None"
+        },
+        "scenario_1": {
+          "period_range": ["<<<"],
+          "outcome_weight": ["<<<"],
+          "periods_without_repeat": "<<<",
+          "max_repeats": "<<<"
+        }
+      }
+    }
+  },
+  "quantity_scenarios": {
+    "scenario_0": {
+      "scenario_description": "This describes business as usual.",
+      "quantity_group_1": {
+        "ID": "Capital and Operating Costs",
+        "group_value_type": "Costs",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Construction Costs",
+          "value": "Construction",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,3"
+          ],
+          "quantity": [
+            "0"
+          ],
+          "MC_PDF": "None",
+          "comments": "No increase to WD under base case."
+        },
+        "quantity_line_2": {
+          "ID": "OM Costs",
+          "value": "Ops and Maintenance",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "4,34"
+          ],
+          "quantity": [
+            "0"
+          ],
+          "MC_PDF": "None",
+          "comments": "No increase to operations and maintenance costs under base case."
+        }
+      },
+      "quantity_group_2": {
+        "ID": "Flood Damage Costs",
+        "group_value_type": "Costs",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Direct Residential",
+          "value": "Unit Cost",
+          "stakeholder_group": "Residents",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FhhDamage(hhBC)"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Direct residential damage under base case."
+        },
+        "quantity_line_2": {
+          "ID": "Direct Commercial Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Business",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FcomDamage(FhhDamage(hhBC))"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Direct commercial damage under base case."
+        },
+        "quantity_line_3": {
+          "ID": "Indirect Commercial Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Business",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FcomDamage(FhhDamage(hhBC))*(0.18+0.1)"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Direct commercial damage under base case."
+        },
+        "quantity_line_4": {
+          "ID": "Public Building Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FpubDamage(FhhDamage(hhBC))*1.1"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Direct public building damage under base case. Plus 10% clean-up costs"
+        },
+        "quantity_line_5": {
+          "ID": "Electrical Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FhhDamage(hhBC)*0.045"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Electrical infrastructure damage under base case. 4.5% of direct residential costs."
+        },
+        "quantity_line_6": {
+          "ID": "Road Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FrdDamage(FhhDamage(hhBC))"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Damage to road infrastructure under the base case."
+        },
+        "quantity_line_7": {
+          "ID": "Loss of Life",
+          "value": "VSL",
+          "stakeholder_group": "Residents",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "DeathsBC"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Loss of life under base case."
+        },
+        "quantity_line_8": {
+          "ID": "Injuries",
+          "value": "Injury",
+          "stakeholder_group": "Residents",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "(DeathsBC*100)/(2*0.3)"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Injuries under base case."
+        },
+        "quantity_line_9": {
+          "ID": "Aboriginal Heritage",
+          "value": "AboriginalCulture",
+          "stakeholder_group": "AboriginalHH",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "0"
+          ],
+          "MC_PDF": "Truncated normal",
+          "PDF_mean": 1.0,
+          "PDF_stdev": 0.35,
+          "rand_each_t": false,
+          "outcome_dependency": "None",
+          "comments": "Based on estimated 5.7% of Aboriginal people living in greater Sydney who live on their native homelands (National Aboriginal and Torres Strait Islander Health Survey, 2018-19), RMSE of 35%. Multiplied by the number of households with an Aboriginal person in SA2s approximating qualitative description of the study area and the homelands of the Darug, Gundungurra, and Tharawal people."
+        }
+      },
+      "quantity_group_3": {
+        "ID": "Environmental Offsets",
+        "group_value_type": "Costs",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Ecosystem Offsets",
+          "value": "ecoOffsetsTC",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "0"
+          ],
+          "MC_PDF": "None",
+          "comments": "Value of ecosystem offsets paid by the government. No offsets under the base case."
+        },
+        "quantity_line_2": {
+          "ID": "Flora Offsets",
+          "value": "floraOffsetsTC",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "0"
+          ],
+          "MC_PDF": "None",
+          "comments": "Value of flora species offsets paid by the government. No offsets under the base case."
+        },
+        "quantity_line_3": {
+          "ID": "Fauna Offsets",
+          "value": "faunaOffsetsTC",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "0"
+          ],
+          "MC_PDF": "None",
+          "comments": "Value of fauna species offsets paid by the government. No offsets under the base case."
+        }
+      },
+      "quantity_group_4": {
+        "ID": "Residual",
+        "group_value_type": "Benefits",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Residual Value",
+          "value": "Construction",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": ["34,34"],
+          "quantity": ["0"],
+          "MC_PDF": "None",
+          "comments": "The value of the residual assests remaining after the 30-year analysis period."
+        }
+      }
+    },
+    "scenario_1": {
+      "scenario_description": "This describes the case where Warragamba dam wall is raised. .",
+      "quantity_group_1": {
+        "ID": "Capital and Operating Costs",
+        "group_value_type": "Costs",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Construction Costs",
+          "value": "Construction",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,3"
+          ],
+          "quantity": [
+            "1/4"
+          ],
+          "MC_PDF": "None",
+          "comments": "Dam is constructed in the Project case. Costs equally apportioned over 4 years."
+        },
+        "quantity_line_2": {
+          "ID": "OM Costs",
+          "value": "Ops and Maintenance",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "4,34"
+          ],
+          "quantity": [
+            "1"
+          ],
+          "MC_PDF": "None",
+          "comments": "O&M costs increase under the project case."
+        }
+      },
+      "quantity_group_2": {
+        "ID": "Flood Damage Costs",
+        "group_value_type": "Costs",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Direct Residential",
+          "value": "Unit Cost",
+          "stakeholder_group": "Residents",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FhhDamage(hhWD)"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Direct residential damage under project case."
+        },
+        "quantity_line_2": {
+          "ID": "Direct Commercial Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Business",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FcomDamage(FhhDamage(hhWD))"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Direct commercial damage under project case."
+        },
+        "quantity_line_3": {
+          "ID": "Indirect Commercial Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Business",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FcomDamage(FhhDamage(hhWD))*(0.18+0.1)"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Direct commercial damage under project case."
+        },
+        "quantity_line_4": {
+          "ID": "Public Building Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FpubDamage(FhhDamage(hhWD))*1.1"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Direct public building damage under project case."
+        },
+        "quantity_line_5": {
+          "ID": "Electrical Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FhhDamage(hhWD)*0.045"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Electrical infrastructure damage under base case. 4.5% of direct residential costs."
+        },
+        "quantity_line_6": {
+          "ID": "Road Damage",
+          "value": "Unit Cost",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "FrdDamage(FhhDamage(hhWD))"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Damage to road infrastructure under the project case."
+        },
+        "quantity_line_7": {
+          "ID": "Loss of Life",
+          "value": "VSL",
+          "stakeholder_group": "Residents",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "DeathsWD"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Loss of life under base case."
+        },
+        "quantity_line_8": {
+          "ID": "Injuries",
+          "value": "Injury",
+          "stakeholder_group": "Residents",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "(DeathsWD*100)/(2*0.3)"
+          ],
+          "MC_PDF": "None",
+          "outcome_dependency": "Flood Occurs",
+          "comments": "Injuries under base case."
+        },
+        "quantity_line_9": {
+          "ID": "Aboriginal Heritage",
+          "value": "AboriginalCulture",
+          "stakeholder_group": "AboriginalHH",
+          "geographic_zone": "Western Sydney",
+          "period_range": [
+            "0,34"
+          ],
+          "quantity": [
+            "1707"
+          ],
+          "MC_PDF": "Truncated normal",
+          "PDF_mean": 1.0,
+          "PDF_stdev": 0.35,
+          "rand_each_t": false,
+          "outcome_dependency": "None",
+          "comments": "Based on estimated 5.7% of Aboriginal people living in greater Sydney who live on their native homelands (National Aboriginal and Torres Strait Islander Health Survey, 2018-19), RMSE of 35%. Multiplied by the number of households with an Aboriginal person in SA2s approximating qualitative description of the study area and the homelands of the Darug, Gundungurra, and Tharawal people."
+        }
+      },
+      "quantity_group_3": {
+        "ID": "Environmental Offsets",
+        "group_value_type": "Costs",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Ecosystem Offsets",
+          "value": "ecoOffsetsTC",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "1"
+          ],
+          "MC_PDF": "None",
+          "comments": "Value of ecosystem offsets paid by the government."
+        },
+        "quantity_line_2": {
+          "ID": "Flora Offsets",
+          "value": "floraOffsetsTC",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "1"
+          ],
+          "MC_PDF": "None",
+          "comments": "Value of flora species offsets paid by the government."
+        },
+        "quantity_line_3": {
+          "ID": "Fauna Offsets",
+          "value": "faunaOffsetsTC",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": [
+            "0,0"
+          ],
+          "quantity": [
+            "1"
+          ],
+          "MC_PDF": "None",
+          "comments": "Value of fauna species offsets paid by the government."
+        }
+      },
+      "quantity_group_4": {
+        "ID": "Residual",
+        "group_value_type": "Benefits",
+        "MC_PDF": "None",
+        "quantity_line_1": {
+          "ID": "Residual Value",
+          "value": "Construction",
+          "stakeholder_group": "Government",
+          "geographic_zone": "All NSW",
+          "period_range": ["34,34"],
+          "quantity": ["(economicLife-30)/economicLife"],
+          "MC_PDF": "None",
+          "comments": "The value of the residual assests remaining after the 30-year analysis period."
+        }
+      }
+    }
+  }
+}
